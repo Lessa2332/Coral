@@ -5,9 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Підводний світ — Coral</title>
   
-  <!-- 8th Wall Binary (SLAM) -->
-  <script async src="xr.js" data-preload-chunks="slam"></script>
-  
   <!-- A-Frame та додаткові компоненти -->
   <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/donmccurdy/[email protected]/dist/aframe-extras.min.js"></script>
@@ -67,7 +64,6 @@
 
   <!-- AR СЦЕНА -->
   <a-scene
-    xrweb="disableWorldTracking: false; disableImageTargets: true; disableFaceTracking: true;"
     background="color: #001133"
     fog="type: linear; color: #001133; near: 2; far: 20"
     xr-mode-ui="enabled: false"
@@ -116,6 +112,21 @@
   </a-scene>
 
   <script>
+    // ========== НАЛАШТУВАННЯ 8TH WALL ==========
+    // Вказуємо, що файли лежать в тій самій папці
+    window.XR8 = window.XR8 || {};
+    XR8.assetRoot = './';
+    
+    // Додаємо SLAM-модуль (xsr-slam)
+    XR8.addChunk('slam', 'xsr-slam');
+    
+    // Завантажуємо основний файл xsr (перейменований в xr.js)
+    const script = document.createElement('script');
+    script.src = 'xr.js';
+    script.async = true;
+    script.setAttribute('data-preload-chunks', 'slam');
+    document.head.appendChild(script);
+    
     // ========== ЛОГІКА AR ==========
     const enterBtn = document.getElementById('enter-btn');
     const loadingDiv = document.getElementById('loading');
@@ -126,23 +137,22 @@
       loadingDiv.innerHTML = '🔍 Завантаження SLAM...';
       
       // Перевіряємо, чи завантажився XR8
-      if (typeof XR8 === 'undefined') {
+      if (typeof XR8 === 'undefined' || !XR8.XrController) {
         loadingDiv.innerHTML = '⏳ Очікування 8th Wall...';
         setTimeout(startAR, 1000);
         return;
       }
       
-      // Завантажуємо SLAM модуль якщо треба
-      if (XR8.Slam && !XR8.Slam.isChunkLoaded) {
-        loadingDiv.innerHTML = '📍 Скануємо простір...';
-        await XR8.loadChunk('slam');
-      }
-      
-      loadingDiv.innerHTML = '✅ Готово!';
+      loadingDiv.innerHTML = '✅ Готово! Запускаємо AR...';
       setTimeout(() => {
         loadingDiv.style.display = 'none';
-        // Запускаємо AR
-        document.querySelector('a-scene').enterAR();
+        // Запускаємо AR через XR8
+        XR8.XrController.configure({ 
+          disableWorldTracking: false,
+          disableImageTargets: true,
+          disableFaceTracking: true 
+        });
+        XR8.run({ canvas: document.querySelector('canvas') });
       }, 1000);
     }
     
@@ -170,27 +180,21 @@
           this.el.setAttribute('scale', '0.5 0.5 0.5');
           this.el.setAttribute('material', 'emissive', '#ffaa00');
           
-          // Спроба відтворити анімацію "happy" (якщо є)
-          try {
-            this.el.setAttribute('animation-mixer', {clip: 'happy', loop: 'once'});
-          } catch(e) {}
-          
         } else if (dist >= 0.7 && this.nearby) {
           this.nearby = false;
           this.el.setAttribute('scale', '0.35 0.35 0.35');
           this.el.setAttribute('material', 'emissive', '#000000');
-          
-          // Повертаємо основну анімацію
-          this.el.setAttribute('animation-mixer', {clip: '*', loop: 'repeat'});
         }
       }
     });
     
-    // Додаємо компонент до всіх тварин
+    // Додаємо компонент до всіх тварин після завантаження
     window.addEventListener('load', () => {
-      document.querySelectorAll('.sea-creature').forEach(el => {
-        el.setAttribute('proximity-interaction', '');
-      });
+      setTimeout(() => {
+        document.querySelectorAll('.sea-creature').forEach(el => {
+          el.setAttribute('proximity-interaction', '');
+        });
+      }, 2000); // Даємо час на завантаження A-Frame
     });
   </script>
 </body>
