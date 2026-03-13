@@ -76,11 +76,10 @@
     <a-light type="ambient" color="#88ccff" intensity="0.6"></a-light>
     <a-light type="directional" color="#ffffff" intensity="1.2" position="2 5 3"></a-light>
     
-    <!-- Допоміжна підлога (якщо SLAM ще не знайшов поверхню) -->
+    <!-- Допоміжна підлога -->
     <a-plane rotation="-90 0 0" position="0 0 0" width="20" height="20" color="#113366" material="side:double; transparent:true; opacity:0.3"></a-plane>
 
     <!-- ========== МОРСЬКІ ТВАРИНИ ========== -->
-    <!-- ТВАРИНА 1: animal1.glb -->
     <a-entity id="creature1"
       gltf-model="url(assets/models/animal1.glb)"
       position="1.2 0.8 2.5"
@@ -89,7 +88,6 @@
       class="sea-creature">
     </a-entity>
 
-    <!-- ТВАРИНА 2: animal2.glb -->
     <a-entity id="creature2"
       gltf-model="url(assets/models/animal2.glb)"
       position="-2.0 1.0 3.0"
@@ -98,7 +96,6 @@
       class="sea-creature">
     </a-entity>
 
-    <!-- ТВАРИНА 3: animal3.glb -->
     <a-entity id="creature3"
       gltf-model="url(assets/models/animal3.glb)"
       position="3.0 1.5 2.0"
@@ -107,36 +104,36 @@
       class="sea-creature">
     </a-entity>
 
-    <!-- Бульбашки (декорація) -->
+    <!-- Бульбашки -->
     <a-entity particle-system="preset: dust; color: #aaddff; particleCount: 30; velocity: 0.1 0.1 0;"></a-entity>
   </a-scene>
 
   <script>
     // ========== НАЛАШТУВАННЯ 8TH WALL ==========
-    // Вказуємо, що файли лежать в тій самій папці
     window.XR8 = window.XR8 || {};
     XR8.assetRoot = './';
+    XR8.addChunk('slam', 'xr-slam.js');
     
-    // Додаємо SLAM-модуль (xsr-slam)
-    XR8.addChunk('slam', 'xsr-slam');
-    
-    // Завантажуємо основний файл xsr (перейменований в xr.js)
+    // Завантажуємо основний файл xrj (це ваш xr.js!)
     const script = document.createElement('script');
-    script.src = 'xr.js';
+    script.src = 'xrj';  // ← ЗВЕРНІТЬ УВАГУ: файл називається xrj (без .js)
     script.async = true;
     script.setAttribute('data-preload-chunks', 'slam');
+    script.onerror = function() {
+      document.getElementById('loading').innerHTML = '❌ Помилка: xrj не знайдено!';
+      console.error('xrj not found');
+    };
     document.head.appendChild(script);
     
     // ========== ЛОГІКА AR ==========
     const enterBtn = document.getElementById('enter-btn');
     const loadingDiv = document.getElementById('loading');
     
-    // Функція входу в AR
-    async function startAR() {
+    function startAR() {
       loadingDiv.style.display = 'block';
       loadingDiv.innerHTML = '🔍 Завантаження SLAM...';
       
-      // Перевіряємо, чи завантажився XR8
+      // Перевіряємо наявність XR8
       if (typeof XR8 === 'undefined' || !XR8.XrController) {
         loadingDiv.innerHTML = '⏳ Очікування 8th Wall...';
         setTimeout(startAR, 1000);
@@ -144,16 +141,20 @@
       }
       
       loadingDiv.innerHTML = '✅ Готово! Запускаємо AR...';
+      
+      // Налаштовуємо XR8
+      XR8.XrController.configure({ 
+        disableWorldTracking: false,
+        disableImageTargets: true,
+        disableFaceTracking: true 
+      });
+      
+      // Запускаємо
+      XR8.run({ canvas: document.querySelector('a-scene canvas') });
+      
       setTimeout(() => {
         loadingDiv.style.display = 'none';
-        // Запускаємо AR через XR8
-        XR8.XrController.configure({ 
-          disableWorldTracking: false,
-          disableImageTargets: true,
-          disableFaceTracking: true 
-        });
-        XR8.run({ canvas: document.querySelector('canvas') });
-      }, 1000);
+      }, 2000);
     }
     
     enterBtn.addEventListener('click', startAR);
@@ -172,14 +173,10 @@
         const entityPos = this.el.object3D.position;
         const dist = camPos.distanceTo(entityPos);
         
-        // Якщо підійшли ближче 0.7 м
         if (dist < 0.7 && !this.nearby) {
           this.nearby = true;
-          
-          // Візуальний зворотній зв'язок
           this.el.setAttribute('scale', '0.5 0.5 0.5');
           this.el.setAttribute('material', 'emissive', '#ffaa00');
-          
         } else if (dist >= 0.7 && this.nearby) {
           this.nearby = false;
           this.el.setAttribute('scale', '0.35 0.35 0.35');
@@ -188,13 +185,13 @@
       }
     });
     
-    // Додаємо компонент до всіх тварин після завантаження
+    // Додаємо компонент до тварин
     window.addEventListener('load', () => {
       setTimeout(() => {
         document.querySelectorAll('.sea-creature').forEach(el => {
           el.setAttribute('proximity-interaction', '');
         });
-      }, 2000); // Даємо час на завантаження A-Frame
+      }, 3000);
     });
   </script>
 </body>
