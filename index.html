@@ -5,8 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Підводний світ — Coral</title>
   
+  <!-- A-Frame та компоненти -->
   <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/donmccurdy/[email protected]/dist/aframe-extras.min.js"></script>
+  
+  <!-- Підтримка розширень glTF -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script>
+    // Реєструємо розширення для GLTFLoader
+    window.addEventListener('load', function() {
+      if (AFRAME.THREE && AFRAME.THREE.GLTFLoader) {
+        // Якщо є потрібне розширення, реєструємо
+        console.log('GLTFLoader готовий');
+      }
+    });
+  </script>
   
   <style>
     body { margin:0; overflow:hidden; font-family: 'Arial', sans-serif; }
@@ -26,50 +39,64 @@
       background: rgba(0,0,0,0.5); color: #00ffaa; padding: 8px 16px;
       border-radius: 20px; font-size: 14px; z-index: 1000;
     }
+    /* Кнопки регулювання масштабу */
+    .scale-controls {
+      position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%);
+      z-index: 1000; display: flex; gap: 20px;
+    }
+    .scale-controls button {
+      padding: 10px 20px; font-size: 20px; background: rgba(0,0,0,0.5);
+      color: white; border: none; border-radius: 30px; cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <div id="loading">🔍 Скануємо кімнату...</div>
   <div id="status">🌊 Підводний світ</div>
   
+  <!-- Аудіо океану -->
   <audio id="ocean-sound" loop preload="auto">
     <source src="assets/sounds/okean.mp3" type="audio/mpeg">
   </audio>
   
   <button id="enter-btn">🐬 Увійти в AR</button>
+  
+  <!-- Кнопки масштабу -->
+  <div class="scale-controls">
+    <button id="scale-down">➖</button>
+    <button id="scale-up">➕</button>
+  </div>
 
+  <!-- AR-сцена з повністю прозорим фоном (тільки моделі) -->
   <a-scene
     background="transparent"
-    fog="type: linear; color: #88ccff; near: 2; far: 20"
     xr-mode-ui="enabled: false"
-    vr-mode-ui="enabled: false">
+    vr-mode-ui="enabled: false"
+    renderer="colorManagement: true;">
 
     <a-camera id="camera" position="0 1.6 0"></a-camera>
 
-    <a-light type="ambient" color="#88ccff" intensity="0.6"></a-light>
-    <a-light type="directional" color="#ffffff" intensity="1.2" position="2 5 3"></a-light>
+    <!-- М'яке освітлення для моделей -->
+    <a-light type="ambient" color="#ffffff" intensity="0.5"></a-light>
+    <a-light type="directional" color="#ffffff" intensity="0.8" position="2 5 3"></a-light>
     
-    <!-- Всі риби отримають компонент swim та proximity-interaction -->
-    
-    <!-- Риби 1-4, 6 -->
-    <a-entity id="fish1" gltf-model="url(assets/models/animal1.glb)" position="1 0.8 1" scale="0.3 0.3 0.3" animation-mixer="clip: *; loop: repeat;" class="fish"></a-entity>
-    <a-entity id="fish2" gltf-model="url(assets/models/animal2.glb)" position="-1 1.2 -1" scale="0.35 0.35 0.35" animation-mixer="clip: *; loop: repeat;" class="fish"></a-entity>
-    <a-entity id="fish3" gltf-model="url(assets/models/animal3.glb)" position="2 0.5 -2" scale="0.4 0.4 0.4" animation-mixer="clip: *; loop: repeat;" class="fish"></a-entity>
-    <a-entity id="fish4" gltf-model="url(assets/models/animal4.glb)" position="-2 1.5 2" scale="0.3 0.3 0.3" animation-mixer="clip: *; loop: repeat;" class="fish"></a-entity>
-    <a-entity id="fish6" gltf-model="url(assets/models/animal6.glb)" position="0.5 0.9 -2.5" scale="0.35 0.35 0.35" animation-mixer="clip: *; loop: repeat;" class="fish"></a-entity>
+    <!-- ========== МОРСЬКІ ТВАРИНИ ========== -->
+    <!-- Риби розміщені біля різних стін/кутів, щоб не перетинатися -->
+    <a-entity id="fish1" gltf-model="url(assets/models/animal1.glb)" position="1.5 0.6 2.0" scale="0.15 0.15 0.15" animation-mixer="clip: *; loop: repeat;" class="fish" data-anchor="front-right"></a-entity>
+    <a-entity id="fish2" gltf-model="url(assets/models/animal2.glb)" position="-1.8 1.0 1.5" scale="0.15 0.15 0.15" animation-mixer="clip: *; loop: repeat;" class="fish" data-anchor="front-left"></a-entity>
+    <a-entity id="fish3" gltf-model="url(assets/models/animal3.glb)" position="2.2 0.8 -1.5" scale="0.15 0.15 0.15" animation-mixer="clip: *; loop: repeat;" class="fish" data-anchor="back-right"></a-entity>
+    <a-entity id="fish4" gltf-model="url(assets/models/animal4.glb)" position="-2.0 1.2 -1.8" scale="0.15 0.15 0.15" animation-mixer="clip: *; loop: repeat;" class="fish" data-anchor="back-left"></a-entity>
+    <a-entity id="fish6" gltf-model="url(assets/models/animal6.glb)" position="0.8 0.7 -2.2" scale="0.15 0.15 0.15" animation-mixer="clip: *; loop: repeat;" class="fish" data-anchor="center-back"></a-entity>
 
-    <!-- Медуза -->
-    <a-entity id="jellyfish" gltf-model="url(assets/models/animal7.glb)" position="1.5 1.8 0" scale="0.4 0.4 0.4" animation-mixer="clip: *; loop: repeat;" class="fish jelly"></a-entity>
+    <!-- Медуза (біля стелі, центр) -->
+    <a-entity id="jellyfish" gltf-model="url(assets/models/animal7.glb)" position="0 2.0 1.0" scale="0.2 0.2 0.2" animation-mixer="clip: *; loop: repeat;" class="fish jelly" data-anchor="top"></a-entity>
 
-    <!-- Морська зірка -->
-    <a-entity id="starfish" gltf-model="url(assets/models/animal5.glb)" position="2 0.1 1" scale="0.5 0.5 0.5" rotation="0 0 0" class="star"></a-entity>
-
-    <!-- Бульбашки -->
-    <a-entity particle-system="preset: dust; color: #aaddff; particleCount: 80; velocity: 0.1 0.1 0; opacity: 0.4;"></a-entity>
+    <!-- Морська зірка (на дні, не плаває) -->
+    <a-entity id="starfish" gltf-model="url(assets/models/animal5.glb)" position="2.0 0.05 1.5" scale="0.2 0.2 0.2" rotation="0 0 0" class="star"></a-entity>
   </a-scene>
 
   <script>
-    // Налаштування 8th Wall
+    // ========== НАЛАШТУВАННЯ 8TH WALL ==========
     window.XR8 = window.XR8 || {};
     XR8.assetRoot = './';
     
@@ -79,26 +106,35 @@
     script.setAttribute('data-preload-chunks', 'slam');
     document.head.appendChild(script);
     
-    // Компонент плавання з уникненням зіткнень
-    AFRAME.registerComponent('swim', {
+    // ========== КОМПОНЕНТ ПЛАВАННЯ З ТЕРИТОРІЯМИ ==========
+    // Кожна риба має "якір" - точку навколо якої вона плаває
+    AFRAME.registerComponent('territory-swim', {
       schema: {
-        speed: {type: 'number', default: 0.5},
-        radius: {type: 'number', default: 3.0},
-        heightMin: {type: 'number', default: 0.5},
-        heightMax: {type: 'number', default: 2.2},
-        changeInterval: {type: 'number', default: 5},
-        avoidDistance: {type: 'number', default: 1.0} // дистанція уникнення
+        speed: {type: 'number', default: 0.3},
+        radius: {type: 'number', default: 1.2},   // радіус території
+        heightRange: {type: 'number', default: 0.8}, // діапазон по висоті
+        changeInterval: {type: 'number', default: 6},
+        anchor: {type: 'string', default: 'center'} // не використовується прямо, але для логіки
       },
       init: function() {
-        this.targetPos = new THREE.Vector3();
+        // Запам'ятовуємо початкову позицію як якір (центр території)
+        this.anchorPos = this.el.object3D.position.clone();
+        this.targetPos = this.anchorPos.clone();
         this.timeSinceChange = 0;
         this.pickNewTarget();
-        this.allFish = []; // будемо збирати всіх риб пізніше
       },
       pickNewTarget: function() {
-        this.targetPos.x = (Math.random() - 0.5) * 2 * this.data.radius;
-        this.targetPos.z = (Math.random() - 0.5) * 2 * this.data.radius;
-        this.targetPos.y = this.data.heightMin + Math.random() * (this.data.heightMax - this.data.heightMin);
+        // Випадкова точка в межах сфери навколо якоря
+        const angle = Math.random() * Math.PI * 2;
+        const radius = Math.random() * this.data.radius;
+        const heightOffset = (Math.random() - 0.5) * this.data.heightRange;
+        
+        this.targetPos.x = this.anchorPos.x + Math.cos(angle) * radius;
+        this.targetPos.z = this.anchorPos.z + Math.sin(angle) * radius;
+        this.targetPos.y = this.anchorPos.y + heightOffset;
+        
+        // Обмежуємо висоту, щоб не виходити за розумні межі
+        this.targetPos.y = Math.max(0.3, Math.min(2.5, this.targetPos.y));
       },
       tick: function(time, delta) {
         this.timeSinceChange += delta / 1000;
@@ -111,53 +147,24 @@
         var direction = new THREE.Vector3().subVectors(this.targetPos, currentPos);
         var distance = direction.length();
         
-        // Уникнення інших риб
-        var avoidForce = new THREE.Vector3(0, 0, 0);
-        if (this.allFish.length === 0) {
-          this.allFish = document.querySelectorAll('.fish');
-        }
-        for (var i = 0; i < this.allFish.length; i++) {
-          var other = this.allFish[i];
-          if (other === this.el) continue;
-          var otherPos = other.object3D.position;
-          var diff = new THREE.Vector3().subVectors(currentPos, otherPos);
-          var dist = diff.length();
-          if (dist < this.data.avoidDistance && dist > 0) {
-            // Відштовхування пропорційне близькості
-            diff.normalize();
-            diff.multiplyScalar((this.data.avoidDistance - dist) / this.data.avoidDistance);
-            avoidForce.add(diff);
-          }
-        }
-        
-        // Комбінуємо напрямок до цілі та силу уникнення
-        var moveDir = direction.clone().normalize();
-        if (avoidForce.length() > 0) {
-          // Вага уникнення 0.3, напрямку до цілі 0.7
-          moveDir.multiplyScalar(0.7);
-          avoidForce.normalize();
-          avoidForce.multiplyScalar(0.3);
-          moveDir.add(avoidForce);
-          moveDir.normalize();
-        }
-        
         if (distance < 0.1) {
           this.pickNewTarget();
         } else {
-          var move = moveDir.multiplyScalar(this.data.speed * delta / 1000);
+          direction.normalize();
+          var move = direction.multiplyScalar(this.data.speed * delta / 1000);
           this.el.object3D.position.add(move);
           
-          // Поворот
+          // Поворот у напрямку руху
           if (move.length() > 0.001) {
             var quat = new THREE.Quaternion();
-            quat.setFromUnitVectors(new THREE.Vector3(0,0,1), moveDir.clone().normalize());
+            quat.setFromUnitVectors(new THREE.Vector3(0,0,1), move.clone().normalize());
             this.el.object3D.quaternion.slerp(quat, 0.1);
           }
         }
       }
     });
     
-    // Компонент "погладити"
+    // ========== КОМПОНЕНТ "ПОГЛАДИТИ" ==========
     AFRAME.registerComponent('proximity-interaction', {
       init: function() {
         this.camera = document.querySelector('#camera');
@@ -171,9 +178,11 @@
         
         if (dist < 0.7 && !this.nearby) {
           this.nearby = true;
-          if (this.el.components.swim) {
-            this.el.components.swim.pickNewTarget();
+          // Змінюємо напрямок (для риб)
+          if (this.el.components['territory-swim']) {
+            this.el.components['territory-swim'].pickNewTarget();
           }
+          // Підсвічування
           this.el.setAttribute('material', 'emissive', '#ffaa00');
         } else if (dist >= 0.7 && this.nearby) {
           this.nearby = false;
@@ -182,7 +191,7 @@
       }
     });
     
-    // Логіка AR
+    // ========== ЛОГІКА AR ==========
     const enterBtn = document.getElementById('enter-btn');
     const loadingDiv = document.getElementById('loading');
     const oceanSound = document.getElementById('ocean-sound');
@@ -191,6 +200,7 @@
       loadingDiv.style.display = 'block';
       loadingDiv.innerHTML = '🔍 Завантаження SLAM...';
       
+      // Запускаємо звук
       oceanSound.play().catch(e => console.log('Аудіо не запустилось:', e));
       
       const checkXR8 = setInterval(() => {
@@ -215,16 +225,36 @@
     
     enterBtn.addEventListener('click', startAR);
     
-    // Ініціалізація
+    // ========== РЕГУЛЮВАННЯ МАСШТАБУ ==========
+    let currentScale = 0.15;
+    document.getElementById('scale-up')?.addEventListener('click', () => {
+      currentScale += 0.05;
+      document.querySelectorAll('.fish').forEach(el => el.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`));
+    });
+    document.getElementById('scale-down')?.addEventListener('click', () => {
+      currentScale = Math.max(0.05, currentScale - 0.05);
+      document.querySelectorAll('.fish').forEach(el => el.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`));
+    });
+    
+    // ========== ІНІЦІАЛІЗАЦІЯ ==========
     window.addEventListener('load', () => {
+      // Додаємо компонент плавання з територіями до всіх риб
       document.querySelectorAll('.fish').forEach(el => {
-        el.setAttribute('swim', '');
+        // Можна налаштувати параметри залежно від якоря
+        const anchor = el.getAttribute('data-anchor');
+        let speed = 0.3;
+        let radius = 1.2;
+        if (anchor === 'top') {
+          speed = 0.2;
+          radius = 0.8;
+        } else if (anchor.includes('back')) {
+          radius = 1.5; // більше місця біля задніх стін
+        }
+        el.setAttribute('territory-swim', `speed: ${speed}; radius: ${radius};`);
         el.setAttribute('proximity-interaction', '');
       });
       
-      const jelly = document.getElementById('jellyfish');
-      if (jelly) jelly.setAttribute('swim', 'speed: 0.2; heightMax: 2.5;');
-      
+      // Зірці – тільки взаємодія
       const star = document.querySelector('.star');
       if (star) star.setAttribute('proximity-interaction', '');
     });
