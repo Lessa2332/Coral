@@ -5,9 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Підводний світ — Coral</title>
   
+  <!-- Іконка (рибка) – більше 404 -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐠</text></svg>">
+  
   <!-- A-Frame 1.7.1 та aframe-extras (оновлений репозиторій) -->
   <script src="https://aframe.io/releases/1.7.1/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.6.1/dist/aframe-extras.min.js"></script>
+  
+  <!-- Підтримка розширень GLTF (щоб прибрати помилку KHR_materials_pbrSpecularGlossiness) -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script>
+    window.addEventListener('load', function() {
+      const THREE = AFRAME.THREE;
+      if (THREE.GLTFLoader && THREE.KHR_materials_pbrSpecularGlossiness) {
+        THREE.GLTFLoader.Extensions.register(THREE.KHR_materials_pbrSpecularGlossiness);
+        console.log('✅ Розширення GLTF зареєстровано');
+      }
+    });
+  </script>
   
   <style>
     body { margin:0; overflow:hidden; font-family: 'Arial', sans-serif; background: transparent; }
@@ -50,10 +65,12 @@
   <div id="loading">🔍 Завантаження...</div>
   <div id="status">🌊 Підводний світ</div>
   
+  <!-- Аудіо океану -->
   <audio id="ocean-sound" loop preload="auto" src="assets/sounds/okean.mp3"></audio>
   
   <button id="enter-btn">🐬 Увійти в AR</button>
   
+  <!-- Елементи керування (з'являються після входу в AR) -->
   <div id="scale-controls" class="hidden">
     <button id="scale-down" class="scale-btn">➖</button>
     <button id="scale-up" class="scale-btn">➕</button>
