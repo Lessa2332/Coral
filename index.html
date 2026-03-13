@@ -112,16 +112,22 @@
     // ========== НАЛАШТУВАННЯ 8TH WALL ==========
     window.XR8 = window.XR8 || {};
     XR8.assetRoot = './';
+    
+    // Додаємо SLAM-модуль
+    XR8.addChunk = XR8.addChunk || function(name, url) {
+      if (!window.XR8CHUNKS) window.XR8CHUNKS = {};
+      window.XR8CHUNKS[name] = url;
+    };
     XR8.addChunk('slam', 'xr-slam.js');
     
-    // Завантажуємо основний файл xrj (це ваш xr.js!)
+    // Завантажуємо основний файл xr.js
     const script = document.createElement('script');
-    script.src = 'xrj';  // ← ЗВЕРНІТЬ УВАГУ: файл називається xrj (без .js)
+    script.src = 'xr.js';
     script.async = true;
     script.setAttribute('data-preload-chunks', 'slam');
     script.onerror = function() {
-      document.getElementById('loading').innerHTML = '❌ Помилка: xrj не знайдено!';
-      console.error('xrj not found');
+      document.getElementById('loading').innerHTML = '❌ Помилка: xr.js не знайдено!';
+      console.error('xr.js not found');
     };
     document.head.appendChild(script);
     
@@ -143,14 +149,24 @@
       loadingDiv.innerHTML = '✅ Готово! Запускаємо AR...';
       
       // Налаштовуємо XR8
-      XR8.XrController.configure({ 
-        disableWorldTracking: false,
-        disableImageTargets: true,
-        disableFaceTracking: true 
-      });
+      if (XR8.XrController && XR8.XrController.configure) {
+        XR8.XrController.configure({ 
+          disableWorldTracking: false,
+          disableImageTargets: true,
+          disableFaceTracking: true 
+        });
+      }
       
       // Запускаємо
-      XR8.run({ canvas: document.querySelector('a-scene canvas') });
+      if (XR8.run) {
+        XR8.run({ canvas: document.querySelector('a-scene canvas') });
+      } else {
+        // Альтернативний спосіб запуску
+        const scene = document.querySelector('a-scene');
+        if (scene && scene.enterVR) {
+          scene.enterVR();
+        }
+      }
       
       setTimeout(() => {
         loadingDiv.style.display = 'none';
