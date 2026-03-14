@@ -35,6 +35,14 @@
       display: none; pointer-events: none; white-space: nowrap;
       border: 2px solid #00bfff; box-shadow: 0 0 30px #00bfff;
     }
+    /* Ретикл (приціл) */
+    #reticle {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 40px; height: 40px; border: 2px solid rgba(255,255,255,0.8);
+      border-radius: 50%; background: transparent; z-index: 1500;
+      display: none; pointer-events: none;
+      box-shadow: 0 0 10px #00bfff;
+    }
     .controls {
       position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%);
       z-index: 1000; display: flex; gap: 20px;
@@ -56,6 +64,7 @@
   <div id="loading">🔍 Завантаження...</div>
   <div id="status">🌊 Підводний світ</div>
   <div id="instruction">👇 Торкнись поверхні, де буде океан</div>
+  <div id="reticle"></div>
   
   <audio id="ocean-sound" loop preload="auto" src="assets/sounds/okean.mp3"></audio>
   
@@ -249,6 +258,7 @@
     const loadingDiv = document.getElementById('loading');
     const statusDiv = document.getElementById('status');
     const instructionDiv = document.getElementById('instruction');
+    const reticleDiv = document.getElementById('reticle');
     const controls = document.querySelector('.controls');
     const muteBtn = document.getElementById('mute-btn');
     const oceanSound = document.getElementById('ocean-sound');
@@ -293,8 +303,9 @@
 
           XR8.run({ canvas: document.querySelector('a-scene canvas') });
 
-          // Показуємо інструкцію після запуску
+          // Показуємо інструкцію та ретикл після запуску
           instructionDiv.style.display = 'block';
+          reticleDiv.style.display = 'block';
           enterBtn.classList.add('hidden');
           loadingDiv.style.display = 'none';
           statusDiv.innerHTML = '🌊 Торкнись поверхні';
@@ -305,41 +316,58 @@
     enterBtn.addEventListener('click', startAR);
 
     // ========== ОБРОБКА ТАПУ ДЛЯ РОЗМІЩЕННЯ СВІТУ ==========
+    let isPlacing = false;
+
     document.addEventListener('click', (event) => {
-      // Якщо AR ще не запущено або світ уже розміщено – ігноруємо
       if (!worldGroup || worldGroup.getAttribute('data-placed') === 'true') return;
+      if (isPlacing) return;
+      isPlacing = true;
 
-      const scene = document.querySelector('a-scene');
-      if (!scene) return;
+      const sceneEl = document.querySelector('a-scene');
+      if (!sceneEl || !sceneEl.canvas) return;
 
-      // Використовуємо raycaster, щоб знайти точку дотику на реальній поверхні
-      const camera = document.getElementById('camera');
-      const direction = new THREE.Vector3();
-      camera.object3D.getWorldDirection(direction);
-      const origin = camera.object3D.position.clone();
+      // Отримуємо координати кліку відносно canvas
+      const rect = sceneEl.canvas.getBoundingClientRect();
+      const x = (event.clientX - rect.left) / rect.width;   // 0..1
+      const y = (event.clientY - rect.top) / rect.height;   // 0..1
 
-      // Виконуємо hit test через 8th Wall (якщо доступно)
-      if (window.XR8 && XR8.Threejs && XR8.Threejs.xr) {
-        const xr = XR8.Threejs.xr();
-        xr.hitTest({ origin: origin.toArray(), direction: direction.toArray() })
-          .then(hits => {
+      if (window.XR8 && XR8.XrController) {
+        XR8.XrController.hitTest(x, y)
+          .then((hits) => {
             if (hits && hits.length > 0) {
+              // Беремо перший (найкращий) результат
               const hit = hits[0];
-              worldGroup.object3D.position.set(hit.position[0], hit.position[1], hit.position[2]);
+              const pos = hit.position;  // [x, y, z]
+
+              // Встановлюємо позицію групи
+              worldGroup.object3D.position.set(pos[0], pos[1], pos[2]);
+
+              // Можна додати невелике зміщення вгору, якщо потрібно
+              // worldGroup.object3D.position.y += 0.02;
+
               worldGroup.setAttribute('data-placed', 'true');
               instructionDiv.style.display = 'none';
+              reticleDiv.style.display = 'none';
               controls.classList.remove('hidden');
               muteBtn.classList.remove('hidden');
-              statusDiv.innerHTML = '🌊 AR активний';
+              statusDiv.innerHTML = '🌊 AR активний — насолоджуйся!';
+
+              console.log('Розміщено на позиції:', pos);
+            } else {
+              console.log('Hit test не знайшов поверхню');
+              statusDiv.innerHTML = '🌊 Не вдалося знайти поверхню — спробуй ще раз';
             }
+            isPlacing = false;
           })
-          .catch(e => console.warn('Hit test failed', e));
+          .catch((e) => {
+            console.error('Hit test error:', e);
+            isPlacing = false;
+          });
       } else {
-        // Fallback: якщо hit test недоступний, просто ховаємо інструкцію
+        // Fallback якщо XR8 ще не готовий
         instructionDiv.style.display = 'none';
-        controls.classList.remove('hidden');
-        muteBtn.classList.remove('hidden');
-        statusDiv.innerHTML = '🌊 AR активний';
+        reticleDiv.style.display = 'none';
+        isPlacing = false;
       }
     });
 
