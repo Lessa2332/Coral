@@ -5,27 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Підводний світ — Coral</title>
   
-  <!-- Іконка (рибка) – більше 404 -->
+  <!-- Іконка -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐠</text></svg>">
   
-  <!-- A-Frame 1.7.1 та aframe-extras (оновлений репозиторій) -->
+  <!-- A-Frame 1.7.1 -->
   <script src="https://aframe.io/releases/1.7.1/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.6.1/dist/aframe-extras.min.js"></script>
   
-  <!-- Підтримка розширень GLTF (щоб прибрати помилку KHR_materials_pbrSpecularGlossiness) -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-  <script>
-    window.addEventListener('load', function() {
-      const THREE = AFRAME.THREE;
-      if (THREE.GLTFLoader && THREE.KHR_materials_pbrSpecularGlossiness) {
-        THREE.GLTFLoader.Extensions.register(THREE.KHR_materials_pbrSpecularGlossiness);
-        console.log('✅ Розширення GLTF зареєстровано');
-      }
-    });
-  </script>
-  
   <style>
-    body { margin:0; overflow:hidden; font-family: 'Arial', sans-serif; background: transparent; }
+    body { margin:0; overflow:hidden; font-family: 'Arial', sans-serif; }
     #enter-btn {
       position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
       padding: 18px 40px; font-size: 24px; background: #00bfff; color: white;
@@ -36,27 +24,25 @@
       position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
       background: rgba(0,0,0,0.7); color: white; padding: 12px 24px;
       border-radius: 40px; z-index: 1000; display: none; font-size: 18px;
-      white-space: nowrap;
     }
     #status {
       position: absolute; top: 80px; left: 20px;
       background: rgba(0,0,0,0.5); color: #00ffaa; padding: 8px 16px;
       border-radius: 20px; font-size: 14px; z-index: 1000;
     }
-    #scale-controls {
+    .controls {
       position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%);
       z-index: 1000; display: flex; gap: 20px;
     }
-    .scale-btn {
+    .controls button {
       padding: 10px 20px; font-size: 20px; background: rgba(0,0,0,0.5);
       color: white; border: none; border-radius: 30px; cursor: pointer;
-      backdrop-filter: blur(4px);
     }
     #mute-btn {
       position: absolute; bottom: 30px; right: 30px;
       padding: 12px 24px; font-size: 18px; background: rgba(0,0,0,0.6);
       color: white; border: none; border-radius: 40px; z-index: 1000;
-      cursor: pointer; backdrop-filter: blur(4px);
+      cursor: pointer;
     }
     .hidden { display: none !important; }
   </style>
@@ -65,19 +51,17 @@
   <div id="loading">🔍 Завантаження...</div>
   <div id="status">🌊 Підводний світ</div>
   
-  <!-- Аудіо океану -->
   <audio id="ocean-sound" loop preload="auto" src="assets/sounds/okean.mp3"></audio>
   
   <button id="enter-btn">🐬 Увійти в AR</button>
   
-  <!-- Елементи керування (з'являються після входу в AR) -->
-  <div id="scale-controls" class="hidden">
-    <button id="scale-down" class="scale-btn">➖</button>
-    <button id="scale-up" class="scale-btn">➕</button>
+  <div class="controls hidden">
+    <button id="scale-down">➖</button>
+    <button id="scale-up">➕</button>
   </div>
   <button id="mute-btn" class="hidden">🔇 Вимкнути звук</button>
 
-  <!-- AR-сцена: прозорий фон, жодних зайвих площин -->
+  <!-- AR-сцена: прозорий фон -->
   <a-scene
     background="transparent"
     xr-mode-ui="enabled: false"
@@ -85,12 +69,11 @@
 
     <a-camera id="camera" position="0 1.6 0"></a-camera>
 
-    <!-- М'яке підводне освітлення -->
+    <!-- Освітлення -->
     <a-light type="ambient" color="#ffffff" intensity="0.4"></a-light>
     <a-light type="directional" color="#ffffff" intensity="0.8" position="2 5 3"></a-light>
     
-    <!-- ========== МОРСЬКІ ІСТОТИ ========== -->
-    <!-- Риби (території розподілені) -->
+    <!-- Риби (території) -->
     <a-entity id="fish1"
       gltf-model="url(assets/models/animal1.glb)"
       position="1.5 0.8 1"
@@ -146,11 +129,11 @@
       data-speed="0.6">
     </a-entity>
 
-    <!-- Медуза (біля стелі, територія обмежена) -->
+    <!-- Медуза (зменшена) -->
     <a-entity id="jellyfish"
       gltf-model="url(assets/models/animal7.glb)"
       position="1.2 2.3 0.5"
-      scale="0.2 0.2 0.2"
+      scale="0.1 0.1 0.1"
       animation-mixer="clip: *; loop: repeat;"
       class="fish jelly"
       data-anchor="1.2 2.3 0.5"
@@ -158,30 +141,29 @@
       data-speed="0.2">
     </a-entity>
 
-    <!-- Морська зірка (на дні) -->
+    <!-- Морська зірка -->
     <a-entity id="starfish"
       gltf-model="url(assets/models/animal5.glb)"
       position="2.0 0.05 1.0"
-      scale="0.2 0.2 0.2"
+      scale="0.15 0.15 0.15"
       class="star">
     </a-entity>
-
   </a-scene>
 
   <script>
-    // ========== НАЛАШТУВАННЯ 8TH WALL ==========
-    // Завантажуємо xr.js (він має лежати поруч із index.html)
+    // ========== 8TH WALL ==========
+    // Завантажуємо xr.js (локальний)
     (function loadXR() {
-      if (document.querySelector('script[src*="xr.js"]')) return;
       const script = document.createElement('script');
       script.src = 'xr.js';
       script.async = true;
       script.setAttribute('data-preload-chunks', 'slam');
-      script.onerror = () => console.error('Не вдалося завантажити xr.js!');
+      script.onload = () => console.log('8th Wall завантажено');
+      script.onerror = () => console.error('Не вдалося завантажити xr.js');
       document.head.appendChild(script);
     })();
 
-    // ========== КОМПОНЕНТ ТЕРИТОРІАЛЬНОГО ПЛАВАННЯ ==========
+    // ========== КОМПОНЕНТ ПЛАВАННЯ ==========
     AFRAME.registerComponent('territory-swim', {
       schema: {
         speed: {type: 'number', default: 0.5},
@@ -189,9 +171,7 @@
         changeInterval: {type: 'number', default: 6}
       },
       init: function() {
-        // anchor – початкова позиція (центр території)
         this.anchor = this.el.object3D.position.clone();
-        // якщо є data-anchor, використовуємо його
         const anchorAttr = this.el.getAttribute('data-anchor');
         if (anchorAttr) {
           const parts = anchorAttr.split(' ').map(Number);
@@ -202,12 +182,10 @@
         this.pickNewTarget();
       },
       pickNewTarget: function() {
-        // випадкова точка в межах радіуса навколо anchor
         const angle = Math.random() * Math.PI * 2;
         const r = Math.random() * this.data.radius;
         const dx = Math.cos(angle) * r;
         const dz = Math.sin(angle) * r;
-        // висота також може варіюватися, але менше
         const dy = (Math.random() - 0.5) * this.data.radius * 0.3;
         this.targetPos.x = this.anchor.x + dx;
         this.targetPos.z = this.anchor.z + dz;
@@ -219,19 +197,15 @@
           this.pickNewTarget();
           this.timeSinceChange = 0;
         }
-
         const currentPos = this.el.object3D.position;
         const direction = new THREE.Vector3().subVectors(this.targetPos, currentPos);
         const distance = direction.length();
-
         if (distance < 0.1) {
           this.pickNewTarget();
         } else {
           direction.normalize();
           const move = direction.multiplyScalar(this.data.speed * delta / 1000);
           this.el.object3D.position.add(move);
-
-          // Поворот у напрямку руху (лише по горизонталі для риб)
           if (move.length() > 0.001) {
             const angle = Math.atan2(move.x, move.z);
             this.el.object3D.rotation.y = angle;
@@ -240,7 +214,7 @@
       }
     });
 
-    // ========== КОМПОНЕНТ "ПОГЛАДИТИ" ==========
+    // ========== ВЗАЄМОДІЯ ==========
     AFRAME.registerComponent('proximity-interaction', {
       init: function() {
         this.camera = document.querySelector('#camera');
@@ -251,10 +225,8 @@
         const camPos = this.camera.object3D.position;
         const entityPos = this.el.object3D.position;
         const dist = camPos.distanceTo(entityPos);
-
         if (dist < 0.7 && !this.nearby) {
           this.nearby = true;
-          // Якщо це риба/медуза – змінюємо напрямок
           if (this.el.components['territory-swim']) {
             this.el.components['territory-swim'].pickNewTarget();
           }
@@ -266,54 +238,45 @@
       }
     });
 
-    // ========== ЛОГІКА ІНТЕРФЕЙСУ ТА AR ==========
+    // ========== ІНТЕРФЕЙС ==========
     const enterBtn = document.getElementById('enter-btn');
     const loadingDiv = document.getElementById('loading');
     const statusDiv = document.getElementById('status');
-    const scaleControls = document.getElementById('scale-controls');
+    const controls = document.querySelector('.controls');
     const muteBtn = document.getElementById('mute-btn');
     const oceanSound = document.getElementById('ocean-sound');
     const scaleDown = document.getElementById('scale-down');
     const scaleUp = document.getElementById('scale-up');
 
-    let currentScale = 0.15; // базовий масштаб для риб (медуза та зірка мають індивідуальні)
-
-    // Масштабування всіх істот (риби, медуза, зірка)
+    let currentScale = 0.15;
     function setAllScale(multiplier) {
       currentScale = Math.max(0.08, Math.min(0.4, multiplier));
       document.querySelectorAll('.fish, .jelly, .star').forEach(el => {
-        const base = el.classList.contains('jelly') ? 0.2 : (el.classList.contains('star') ? 0.2 : 0.15);
-        el.setAttribute('scale', `${base * (currentScale/0.15)} ${base * (currentScale/0.15)} ${base * (currentScale/0.15)}`);
+        const base = el.classList.contains('jelly') ? 0.1 : (el.classList.contains('star') ? 0.15 : 0.15);
+        const factor = currentScale / 0.15;
+        el.setAttribute('scale', `${base * factor} ${base * factor} ${base * factor}`);
       });
     }
 
     scaleDown.addEventListener('click', () => setAllScale(currentScale - 0.02));
     scaleUp.addEventListener('click', () => setAllScale(currentScale + 0.02));
 
-    // Керування звуком
     muteBtn.addEventListener('click', () => {
-      if (oceanSound.muted) {
-        oceanSound.muted = false;
-        muteBtn.textContent = '🔇 Вимкнути звук';
-      } else {
-        oceanSound.muted = true;
-        muteBtn.textContent = '🔊 Увімкнути звук';
-      }
+      oceanSound.muted = !oceanSound.muted;
+      muteBtn.textContent = oceanSound.muted ? '🔊 Увімкнути звук' : '🔇 Вимкнути звук';
     });
 
-    // Запуск AR
+    // ========== ЗАПУСК AR ==========
     function startAR() {
       loadingDiv.style.display = 'block';
-      loadingDiv.innerHTML = '🔍 Завантаження SLAM...';
+      loadingDiv.innerHTML = '🔍 Запуск AR...';
 
-      // Спроба запустити звук (потрібна взаємодія користувача)
-      oceanSound.play().catch(e => console.warn('Аудіо не запустилось (потрібен дотик):', e));
+      oceanSound.play().catch(e => console.warn('Аудіо не запустилось:', e));
 
-      // Перевіряємо наявність XR8
+      // Чекаємо XR8
       const checkXR8 = setInterval(() => {
         if (typeof XR8 !== 'undefined' && XR8.XrController) {
           clearInterval(checkXR8);
-          loadingDiv.innerHTML = '✅ Готово! Запускаємо AR...';
 
           // Налаштовуємо 8th Wall
           XR8.XrController.configure({
@@ -325,24 +288,21 @@
           // Запускаємо AR
           XR8.run({ canvas: document.querySelector('a-scene canvas') });
 
-          // Показуємо елементи керування
-          scaleControls.classList.remove('hidden');
-          muteBtn.classList.remove('hidden');
+          // Ховаємо кнопку, показуємо елементи керування
           enterBtn.classList.add('hidden');
+          controls.classList.remove('hidden');
+          muteBtn.classList.remove('hidden');
           statusDiv.innerHTML = '🌊 AR активний';
 
-          setTimeout(() => {
-            loadingDiv.style.display = 'none';
-          }, 1500);
+          loadingDiv.style.display = 'none';
         }
       }, 500);
     }
 
     enterBtn.addEventListener('click', startAR);
 
-    // ========== ІНІЦІАЛІЗАЦІЯ ПІСЛЯ ЗАВАНТАЖЕННЯ СЦЕНИ ==========
+    // ========== ІНІЦІАЛІЗАЦІЯ ==========
     window.addEventListener('load', () => {
-      // Додаємо компонент територіального плавання до всіх риб
       document.querySelectorAll('.fish').forEach(el => {
         const speed = parseFloat(el.getAttribute('data-speed') || 0.5);
         const radius = parseFloat(el.getAttribute('data-radius') || 1.5);
@@ -350,36 +310,27 @@
         el.setAttribute('proximity-interaction', '');
       });
 
-      // Медузу окремо (повільніше)
       const jelly = document.getElementById('jellyfish');
       if (jelly) {
         jelly.setAttribute('territory-swim', { speed: 0.2, radius: 1.0 });
         jelly.setAttribute('proximity-interaction', '');
       }
 
-      // Зірці тільки взаємодію
       const star = document.getElementById('starfish');
       if (star) star.setAttribute('proximity-interaction', '');
 
-      // Попереднє завантаження моделей (в A-Frame вони завантажуються автоматично, але можна відстежити)
+      // Індикація завантаження моделей
       const models = document.querySelectorAll('[gltf-model]');
-      let loadedCount = 0;
-      if (models.length > 0) {
-        loadingDiv.style.display = 'block';
-        loadingDiv.innerHTML = '🔍 Завантаження моделей...';
-        models.forEach(el => {
-          el.addEventListener('model-loaded', () => {
-            loadedCount++;
-            if (loadedCount === models.length) {
-              loadingDiv.innerHTML = '✅ Моделі завантажено!';
-              setTimeout(() => { if (!enterBtn.classList.contains('hidden')) loadingDiv.style.display = 'none'; }, 1000);
-            }
-          });
-          el.addEventListener('model-error', () => {
-            console.warn('Не вдалося завантажити модель', el);
-          });
+      let loaded = 0;
+      models.forEach(el => {
+        el.addEventListener('model-loaded', () => {
+          loaded++;
+          if (loaded === models.length) {
+            loadingDiv.innerHTML = '✅ Готово!';
+            setTimeout(() => loadingDiv.style.display = 'none', 1000);
+          }
         });
-      }
+      });
     });
   </script>
 </body>
