@@ -5,10 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Підводний світ — Coral</title>
   
-  <!-- Іконка -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐠</text></svg>">
   
-  <!-- A-Frame 1.7.1 -->
   <script src="https://aframe.io/releases/1.7.1/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.6.1/dist/aframe-extras.min.js"></script>
   
@@ -30,6 +28,13 @@
       background: rgba(0,0,0,0.5); color: #00ffaa; padding: 8px 16px;
       border-radius: 20px; font-size: 14px; z-index: 1000;
     }
+    #instruction {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.8); color: white; padding: 20px 40px;
+      border-radius: 60px; font-size: 28px; z-index: 2000; text-align: center;
+      display: none; pointer-events: none; white-space: nowrap;
+      border: 2px solid #00bfff; box-shadow: 0 0 30px #00bfff;
+    }
     .controls {
       position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%);
       z-index: 1000; display: flex; gap: 20px;
@@ -50,6 +55,7 @@
 <body>
   <div id="loading">🔍 Завантаження...</div>
   <div id="status">🌊 Підводний світ</div>
+  <div id="instruction">👇 Торкнись поверхні, де буде океан</div>
   
   <audio id="ocean-sound" loop preload="auto" src="assets/sounds/okean.mp3"></audio>
   
@@ -61,7 +67,6 @@
   </div>
   <button id="mute-btn" class="hidden">🔇 Вимкнути звук</button>
 
-  <!-- AR-сцена: прозорий фон -->
   <a-scene
     background="transparent"
     xr-mode-ui="enabled: false"
@@ -69,90 +74,91 @@
 
     <a-camera id="camera" position="0 1.6 0"></a-camera>
 
-    <!-- Освітлення -->
     <a-light type="ambient" color="#ffffff" intensity="0.4"></a-light>
     <a-light type="directional" color="#ffffff" intensity="0.8" position="2 5 3"></a-light>
     
-    <!-- Риби (території) -->
-    <a-entity id="fish1"
-      gltf-model="url(assets/models/animal1.glb)"
-      position="1.5 0.8 1"
-      scale="0.15 0.15 0.15"
-      animation-mixer="clip: *; loop: repeat;"
-      class="fish"
-      data-anchor="1.5 0.8 1"
-      data-radius="1.2"
-      data-speed="0.5">
-    </a-entity>
+    <!-- Група, яка буде переміщуватись при тапу -->
+    <a-entity id="world-group">
+      <!-- Риби -->
+      <a-entity id="fish1"
+        gltf-model="url(assets/models/animal1.glb)"
+        position="1.5 0.8 1"
+        scale="0.15 0.15 0.15"
+        animation-mixer="clip: *; loop: repeat;"
+        class="fish"
+        data-anchor="1.5 0.8 1"
+        data-radius="1.2"
+        data-speed="0.5">
+      </a-entity>
 
-    <a-entity id="fish2"
-      gltf-model="url(assets/models/animal2.glb)"
-      position="-1.8 1.0 -1.5"
-      scale="0.16 0.16 0.16"
-      animation-mixer="clip: *; loop: repeat;"
-      class="fish"
-      data-anchor="-1.8 1.0 -1.5"
-      data-radius="1.3"
-      data-speed="0.6">
-    </a-entity>
+      <a-entity id="fish2"
+        gltf-model="url(assets/models/animal2.glb)"
+        position="-1.8 1.0 -1.5"
+        scale="0.16 0.16 0.16"
+        animation-mixer="clip: *; loop: repeat;"
+        class="fish"
+        data-anchor="-1.8 1.0 -1.5"
+        data-radius="1.3"
+        data-speed="0.6">
+      </a-entity>
 
-    <a-entity id="fish3"
-      gltf-model="url(assets/models/animal3.glb)"
-      position="2.2 0.6 -2.0"
-      scale="0.18 0.18 0.18"
-      animation-mixer="clip: *; loop: repeat;"
-      class="fish"
-      data-anchor="2.2 0.6 -2.0"
-      data-radius="1.4"
-      data-speed="0.55">
-    </a-entity>
+      <a-entity id="fish3"
+        gltf-model="url(assets/models/animal3.glb)"
+        position="2.2 0.6 -2.0"
+        scale="0.18 0.18 0.18"
+        animation-mixer="clip: *; loop: repeat;"
+        class="fish"
+        data-anchor="2.2 0.6 -2.0"
+        data-radius="1.4"
+        data-speed="0.55">
+      </a-entity>
 
-    <a-entity id="fish4"
-      gltf-model="url(assets/models/animal4.glb)"
-      position="-2.0 1.5 2.2"
-      scale="0.14 0.14 0.14"
-      animation-mixer="clip: *; loop: repeat;"
-      class="fish"
-      data-anchor="-2.0 1.5 2.2"
-      data-radius="1.5"
-      data-speed="0.5">
-    </a-entity>
+      <a-entity id="fish4"
+        gltf-model="url(assets/models/animal4.glb)"
+        position="-2.0 1.5 2.2"
+        scale="0.14 0.14 0.14"
+        animation-mixer="clip: *; loop: repeat;"
+        class="fish"
+        data-anchor="-2.0 1.5 2.2"
+        data-radius="1.5"
+        data-speed="0.5">
+      </a-entity>
 
-    <a-entity id="fish6"
-      gltf-model="url(assets/models/animal6.glb)"
-      position="0.8 1.2 -2.5"
-      scale="0.15 0.15 0.15"
-      animation-mixer="clip: *; loop: repeat;"
-      class="fish"
-      data-anchor="0.8 1.2 -2.5"
-      data-radius="1.2"
-      data-speed="0.6">
-    </a-entity>
+      <a-entity id="fish6"
+        gltf-model="url(assets/models/animal6.glb)"
+        position="0.8 1.2 -2.5"
+        scale="0.15 0.15 0.15"
+        animation-mixer="clip: *; loop: repeat;"
+        class="fish"
+        data-anchor="0.8 1.2 -2.5"
+        data-radius="1.2"
+        data-speed="0.6">
+      </a-entity>
 
-    <!-- Медуза (зменшена) -->
-    <a-entity id="jellyfish"
-      gltf-model="url(assets/models/animal7.glb)"
-      position="1.2 2.3 0.5"
-      scale="0.1 0.1 0.1"
-      animation-mixer="clip: *; loop: repeat;"
-      class="fish jelly"
-      data-anchor="1.2 2.3 0.5"
-      data-radius="1.0"
-      data-speed="0.2">
-    </a-entity>
+      <!-- Медуза -->
+      <a-entity id="jellyfish"
+        gltf-model="url(assets/models/animal7.glb)"
+        position="1.2 2.3 0.5"
+        scale="0.1 0.1 0.1"
+        animation-mixer="clip: *; loop: repeat;"
+        class="fish jelly"
+        data-anchor="1.2 2.3 0.5"
+        data-radius="1.0"
+        data-speed="0.2">
+      </a-entity>
 
-    <!-- Морська зірка -->
-    <a-entity id="starfish"
-      gltf-model="url(assets/models/animal5.glb)"
-      position="2.0 0.05 1.0"
-      scale="0.15 0.15 0.15"
-      class="star">
+      <!-- Морська зірка -->
+      <a-entity id="starfish"
+        gltf-model="url(assets/models/animal5.glb)"
+        position="2.0 0.05 1.0"
+        scale="0.15 0.15 0.15"
+        class="star">
+      </a-entity>
     </a-entity>
   </a-scene>
 
   <script>
     // ========== 8TH WALL ==========
-    // Завантажуємо xr.js (локальний)
     (function loadXR() {
       const script = document.createElement('script');
       script.src = 'xr.js';
@@ -242,11 +248,13 @@
     const enterBtn = document.getElementById('enter-btn');
     const loadingDiv = document.getElementById('loading');
     const statusDiv = document.getElementById('status');
+    const instructionDiv = document.getElementById('instruction');
     const controls = document.querySelector('.controls');
     const muteBtn = document.getElementById('mute-btn');
     const oceanSound = document.getElementById('ocean-sound');
     const scaleDown = document.getElementById('scale-down');
     const scaleUp = document.getElementById('scale-up');
+    const worldGroup = document.getElementById('world-group');
 
     let currentScale = 0.15;
     function setAllScale(multiplier) {
@@ -273,33 +281,67 @@
 
       oceanSound.play().catch(e => console.warn('Аудіо не запустилось:', e));
 
-      // Чекаємо XR8
       const checkXR8 = setInterval(() => {
         if (typeof XR8 !== 'undefined' && XR8.XrController) {
           clearInterval(checkXR8);
 
-          // Налаштовуємо 8th Wall
           XR8.XrController.configure({
             disableWorldTracking: false,
             disableImageTargets: true,
             disableFaceTracking: true
           });
 
-          // Запускаємо AR
           XR8.run({ canvas: document.querySelector('a-scene canvas') });
 
-          // Ховаємо кнопку, показуємо елементи керування
+          // Показуємо інструкцію після запуску
+          instructionDiv.style.display = 'block';
           enterBtn.classList.add('hidden');
-          controls.classList.remove('hidden');
-          muteBtn.classList.remove('hidden');
-          statusDiv.innerHTML = '🌊 AR активний';
-
           loadingDiv.style.display = 'none';
+          statusDiv.innerHTML = '🌊 Торкнись поверхні';
         }
       }, 500);
     }
 
     enterBtn.addEventListener('click', startAR);
+
+    // ========== ОБРОБКА ТАПУ ДЛЯ РОЗМІЩЕННЯ СВІТУ ==========
+    document.addEventListener('click', (event) => {
+      // Якщо AR ще не запущено або світ уже розміщено – ігноруємо
+      if (!worldGroup || worldGroup.getAttribute('data-placed') === 'true') return;
+
+      const scene = document.querySelector('a-scene');
+      if (!scene) return;
+
+      // Використовуємо raycaster, щоб знайти точку дотику на реальній поверхні
+      const camera = document.getElementById('camera');
+      const direction = new THREE.Vector3();
+      camera.object3D.getWorldDirection(direction);
+      const origin = camera.object3D.position.clone();
+
+      // Виконуємо hit test через 8th Wall (якщо доступно)
+      if (window.XR8 && XR8.Threejs && XR8.Threejs.xr) {
+        const xr = XR8.Threejs.xr();
+        xr.hitTest({ origin: origin.toArray(), direction: direction.toArray() })
+          .then(hits => {
+            if (hits && hits.length > 0) {
+              const hit = hits[0];
+              worldGroup.object3D.position.set(hit.position[0], hit.position[1], hit.position[2]);
+              worldGroup.setAttribute('data-placed', 'true');
+              instructionDiv.style.display = 'none';
+              controls.classList.remove('hidden');
+              muteBtn.classList.remove('hidden');
+              statusDiv.innerHTML = '🌊 AR активний';
+            }
+          })
+          .catch(e => console.warn('Hit test failed', e));
+      } else {
+        // Fallback: якщо hit test недоступний, просто ховаємо інструкцію
+        instructionDiv.style.display = 'none';
+        controls.classList.remove('hidden');
+        muteBtn.classList.remove('hidden');
+        statusDiv.innerHTML = '🌊 AR активний';
+      }
+    });
 
     // ========== ІНІЦІАЛІЗАЦІЯ ==========
     window.addEventListener('load', () => {
