@@ -3,49 +3,46 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Підводний світ — Local WebAR</title>
+    <title>Підводний світ — AR Local</title>
 
     <!-- Бібліотеки рендерингу -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
     
-    <!-- ВАШ ЛОКАЛЬНИЙ БІНАРНИК -->
+    <!-- ПІДКЛЮЧАЄМО ВСІ ВАШІ БІНАРНИКИ (Порядок важливий) -->
     <script src="xr.js"></script>
+    <script src="xr-slam.js"></script> <!-- Тут лежить SLAM та Pipeline модулі -->
 
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; background: #000; }
         #overlay { position: absolute; z-index: 100; width: 100%; height: 100%; pointer-events: none; }
         .ui { pointer-events: auto; }
-        
         #enter-btn { 
             position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%);
             padding: 20px 40px; font-size: 20px; background: #00bfff; color: #fff;
             border: none; border-radius: 50px; cursor: pointer; font-weight: bold;
         }
-
         #instruction { 
             position: absolute; top: 30px; width: 100%; text-align: center;
             color: white; font-size: 18px; text-shadow: 0 2px 4px rgba(0,0,0,0.8);
         }
-
         #reticle { 
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             width: 60px; height: 60px; border: 4px solid rgba(255,255,255,0.5);
-            border-radius: 50%; display: none;
+            border-radius: 50%; display: none; pointer-events: none;
         }
         .ready { border-color: #00ffaa !important; box-shadow: 0 0 20px #00ffaa; }
         .hidden { display: none !important; }
     </style>
 
     <script>
-        // 1. НАЛАШТУВАННЯ ШЛЯХІВ ДО ЛОКАЛЬНИХ РЕСУРСІВ (resources/)
+        // 1. КОНФІГУРАЦІЯ ШЛЯХІВ
         window.XR8Config = {
-            webWorkerPath: location.href.substring(0, location.href.lastIndexOf("/")) + '/resources/media-worker.js',
-            tflitePath: location.href.substring(0, location.href.lastIndexOf("/")) + '/resources/',
-            device: { ANY: 'any' }
+            webWorkerPath: 'resources/media-worker.js',
+            tflitePath: 'resources/'
         };
 
-        // 2. КОМПОНЕНТ РУХУ РИБОК
+        // 2. КОМПОНЕНТ РИБОК
         AFRAME.registerComponent('territory-swim', {
             schema: { speed: {default: 0.5}, radius: {default: 2} },
             init: function () {
@@ -64,12 +61,12 @@
             }
         });
 
-        // 3. КОМПОНЕНТ РОЗМІЩЕННЯ (З ВИПРАВЛЕННЯМ ПОМИЛОК HITTEST)
+        // 3. КОМПОНЕНТ РОЗМІЩЕННЯ (БЕЗПЕЧНИЙ)
         AFRAME.registerComponent('place-on-tap', {
             init: function () {
-                this.placed = false;
                 this.world = document.querySelector('#world-group');
                 this.reticle = document.querySelector('#reticle');
+                this.placed = false;
 
                 this.el.addEventListener('click', () => {
                     if (this.placed || !window.XR8 || !window.XR8.XrController) return;
@@ -82,13 +79,13 @@
                             this.world.setAttribute('visible', 'true');
                             this.placed = true;
                             this.reticle.style.display = 'none';
-                            document.querySelector('#instruction').innerHTML = "🌊 Океан активовано!";
+                            document.querySelector('#instruction').innerHTML = "🐟 Океан тут!";
                         }
                     });
                 });
             },
             tick: function() {
-                // ПЕРЕВІРКА: щоб не було помилки hitTest до старту камери
+                // ПЕРЕВІРКА: чи існує XrController (прибираємо помилку null)
                 if (this.placed || !window.XR8 || !window.XR8.XrController) return;
 
                 window.XR8.XrController.hitTest(0.5, 0.5, ['surface']).then((hits) => {
@@ -98,21 +95,29 @@
             }
         });
 
-        // 4. ЗАПУСК AR (ЧЕРЕЗ THREE.JS BRIDGE)
+        // 4. ЗАПУСК AR (З ПЕРЕВІРКОЮ МОДУЛІВ)
         function startAR() {
             const scene = document.querySelector('a-scene');
-            const audio = document.getElementById('ocean-sound');
+            
+            if (!window.XR8) {
+                alert("Рушій AR не завантажився!");
+                return;
+            }
 
-            // Якщо XR8.AFrame відсутній, використовуємо Threejs пайплайн
-            const modules = [
-                window.XR8.GlTextureRenderer.pipelineModule(),
-                window.XR8.Threejs.pipelineModule(),
-                window.XR8.XrController.pipelineModule(),
-            ];
+            // Динамічна перевірка наявності модулів, щоб уникнути TypeError
+            const modules = [];
+            
+            if (window.XR8.GlTextureRenderer) modules.push(window.XR8.GlTextureRenderer.pipelineModule());
+            if (window.XR8.Threejs) modules.push(window.XR8.Threejs.pipelineModule());
+            if (window.XR8.XrController) modules.push(window.XR8.XrController.pipelineModule());
+            
+            // Якщо у вашій збірці є спеціальний модуль для AFrame
+            if (window.XR8.AFrame) modules.push(window.XR8.AFrame.pipelineModule());
 
-            // Додаємо підтримку A-Frame камери вручну, якщо метод відсутній
-            if (window.XR8.AFrame) {
-                modules.push(window.XR8.AFrame.pipelineModule());
+            if (modules.length === 0) {
+                console.error("Помилка: Модулі рушія не знайдені в xr.js або xr-slam.js");
+                alert("Помилка ініціалізації модулів. Перевірте консоль.");
+                return;
             }
 
             window.XR8.addCameraPipelineModules(modules);
@@ -124,16 +129,17 @@
 
             document.getElementById('enter-btn').classList.add('hidden');
             document.getElementById('reticle').style.display = 'block';
-            document.getElementById('instruction').innerHTML = "Знайдіть рівну поверхню";
+            document.getElementById('instruction').innerHTML = "Наведіть на підлогу";
             
-            if(audio) audio.play();
+            const audio = document.getElementById('ocean-sound');
+            if (audio) audio.play();
         }
     </script>
 </head>
 <body>
 
     <div id="overlay">
-        <div id="instruction" class="ui">Підводний світ чекає...</div>
+        <div id="instruction" class="ui">Підводний світ завантажується...</div>
         <div id="reticle"></div>
         <button id="enter-btn" class="ui" onclick="startAR()">🐬 УВІЙТИ В AR</button>
     </div>
@@ -149,40 +155,15 @@
         <a-assets>
             <a-asset-item id="m1" src="assets/models/animal1.glb"></a-asset-item>
             <a-asset-item id="m2" src="assets/models/animal2.glb"></a-asset-item>
-            <a-asset-item id="m3" src="assets/models/animal3.glb"></a-asset-item>
         </a-assets>
 
-        <!-- Камера, якою керуватиме 8th Wall -->
         <a-camera id="camera" position="0 1.6 0"></a-camera>
-
         <a-light type="ambient" intensity="0.8"></a-light>
         <a-light type="directional" position="1 5 2" intensity="1"></a-light>
 
         <a-entity id="world-group" visible="false">
-            <!-- Приклад розміщення рибок -->
-            <a-entity 
-                gltf-model="#m1" 
-                position="0 1 -2" 
-                scale="0.2 0.2 0.2" 
-                animation-mixer="clip: *; loop: repeat"
-                territory-swim="speed: 0.6; radius: 1.5">
-            </a-entity>
-
-            <a-entity 
-                gltf-model="#m2" 
-                position="1.5 0.5 -1" 
-                scale="0.3 0.3 0.3" 
-                animation-mixer="clip: *; loop: repeat"
-                territory-swim="speed: 0.4; radius: 2.5">
-            </a-entity>
-
-            <a-entity 
-                gltf-model="#m3" 
-                position="-1 1.2 -3" 
-                scale="0.15 0.15 0.15" 
-                animation-mixer="clip: *; loop: repeat"
-                territory-swim="speed: 0.8; radius: 1.2">
-            </a-entity>
+            <a-entity gltf-model="#m1" position="0 1 -2" scale="0.2 0.2 0.2" animation-mixer territory-swim></a-entity>
+            <a-entity gltf-model="#m2" position="1.5 0.5 -1" scale="0.3 0.3 0.3" animation-mixer territory-swim></a-entity>
         </a-entity>
 
     </a-scene>
