@@ -3,15 +3,14 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Підводний світ AR</title>
+    <title>Підводний світ AR — Fix</title>
 
-    <!-- 1. Рендеринг -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
     
-    <!-- 2. БІНАРНИКИ (Виправляємо помилку export) -->
+    <!-- Бінарники -->
     <script src="xr.js"></script>
-    <script type="module" src="xr-slam.js"></script> <!-- Додано type="module" -->
+    <script type="module" src="xr-slam.js"></script>
 
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; background: #000; }
@@ -36,13 +35,12 @@
     </style>
 
     <script>
-        // Шляхи до воркерів
         window.XR8Config = {
             webWorkerPath: 'resources/media-worker.js',
             tflitePath: 'resources/'
         };
 
-        // Компонент плавання
+        // 1. Компонент для плавання
         AFRAME.registerComponent('territory-swim', {
             schema: { speed: {default: 0.5}, radius: {default: 2} },
             init: function () {
@@ -61,7 +59,7 @@
             }
         });
 
-        // Компонент кліку
+        // 2. Компонент для розміщення океану
         AFRAME.registerComponent('place-on-tap', {
             init: function () {
                 this.world = document.querySelector('#world-group');
@@ -69,9 +67,7 @@
                 this.placed = false;
 
                 this.el.addEventListener('click', () => {
-                    // Перевіряємо наявність XrController перед використанням
                     if (this.placed || !window.XR8 || !window.XR8.XrController) return;
-
                     window.XR8.XrController.hitTest(0.5, 0.5, ['surface']).then((hits) => {
                         if (hits.length > 0) {
                             const hit = hits[0];
@@ -87,7 +83,6 @@
             },
             tick: function() {
                 if (this.placed || !window.XR8 || !window.XR8.XrController) return;
-
                 window.XR8.XrController.hitTest(0.5, 0.5, ['surface']).then((hits) => {
                     if (hits.length > 0) this.reticle.classList.add('ready');
                     else this.reticle.classList.remove('ready');
@@ -95,64 +90,56 @@
             }
         });
 
-        // Функція запуску (Викликається кнопкою)
+        // 3. ФУНКЦІЯ ЗАПУСКУ (ВИПРАВЛЕНА)
         window.startAR = function() {
             const scene = document.querySelector('a-scene');
+            const aCamera = document.querySelector('a-camera');
             
-            if (!window.XR8) {
-                alert("Помилка: XR8 не завантажився. Перевірте консоль.");
+            // ВАЖЛИВО: Отримуємо реальний об'єкт камери Three.js
+            const threeCamera = aCamera.getObject3D('camera');
+
+            if (!threeCamera) {
+                console.error("Камера A-Frame ще не готова!");
                 return;
             }
 
-            // Масив модулів, які ТОЧНО є в бінарнику
-            const modules = [];
+            // Налаштовуємо пайплайн
+            const pipelineModules = [
+                window.XR8.GlTextureRenderer.pipelineModule(), // Малює відео
+                window.XR8.Threejs.pipelineModule(),           // Зв'язок з Three.js
+                window.XR8.XrController.pipelineModule(),      // Пошук поверхні
+            ];
 
-            if (window.XR8.GlTextureRenderer) {
-                modules.push(window.XR8.GlTextureRenderer.pipelineModule());
-            }
-            
-            if (window.XR8.Threejs) {
-                modules.push(window.XR8.Threejs.pipelineModule());
-            }
+            // Додаємо модулі до XR8
+            window.XR8.addCameraPipelineModules(pipelineModules);
 
-            if (window.XR8.XrController) {
-                modules.push(window.XR8.XrController.pipelineModule());
-            }
-
-            // Якщо AFrame модуля немає, 8th Wall все одно працюватиме через Threejs міст
-            if (window.XR8.AFrame && typeof window.XR8.AFrame.pipelineModule === 'function') {
-                modules.push(window.XR8.AFrame.pipelineModule());
-            }
-
-            // Додаємо зібрані модулі
-            window.XR8.addCameraPipelineModules(modules);
-
-            // Запуск
+            // ЗАПУСК: Передаємо камеру явно, щоб не було помилки updateCameraProjectionMatrix
             window.XR8.run({
                 canvas: scene.canvas,
+                camera: threeCamera, // Явно передаємо камеру
                 allowedDevices: 'any'
             });
 
             document.getElementById('enter-btn').classList.add('hidden');
             document.getElementById('reticle').style.display = 'block';
-            document.getElementById('instruction').innerHTML = "Знайдіть поверхню підлоги";
+            document.getElementById('instruction').innerHTML = "Знайдіть підлогу";
             
             const audio = document.getElementById('ocean-sound');
-            if (audio) audio.play();
+            if (audio) audio.play().catch(e => console.log("Audio play blocked"));
         }
     </script>
 </head>
 <body>
 
     <div id="overlay">
-        <div id="instruction" class="ui">Зачекайте, AR ініціалізується...</div>
+        <div id="instruction" class="ui">Налаштування камери...</div>
         <div id="reticle"></div>
-        <!-- Використовуємо window.startAR щоб уникнути проблем з областю видимості модулів -->
         <button id="enter-btn" class="ui" onclick="window.startAR()">🐬 УВІЙТИ В AR</button>
     </div>
 
     <audio id="ocean-sound" loop src="assets/sounds/okean.mp3"></audio>
 
+    <!-- Сцена A-Frame -->
     <a-scene
         place-on-tap
         xr-mode-ui="enabled: false"
@@ -164,11 +151,13 @@
             <a-asset-item id="m2" src="assets/models/animal2.glb"></a-asset-item>
         </a-assets>
 
+        <!-- Камера -->
         <a-camera id="camera" position="0 1.6 0"></a-camera>
 
         <a-light type="ambient" intensity="0.8"></a-light>
         <a-light type="directional" position="1 5 2" intensity="1"></a-light>
 
+        <!-- Контент -->
         <a-entity id="world-group" visible="false">
             <a-entity gltf-model="#m1" position="0 1 -2" scale="0.2 0.2 0.2" animation-mixer territory-swim></a-entity>
             <a-entity gltf-model="#m2" position="1.5 0.5 -1" scale="0.3 0.3 0.3" animation-mixer territory-swim></a-entity>
@@ -177,14 +166,10 @@
     </a-scene>
 
     <script>
-        // Перевірка завантаження модулів
-        window.addEventListener('load', () => {
-            const check = setInterval(() => {
-                if (window.XR8) {
-                    clearInterval(check);
-                    document.getElementById('instruction').innerHTML = "Все готово! Натисніть кнопку.";
-                }
-            }, 500);
+        // Чекаємо поки сцена і камера завантажаться, перш ніж дозволити запуск
+        const scene = document.querySelector('a-scene');
+        scene.addEventListener('loaded', () => {
+            document.getElementById('instruction').innerHTML = "Все готово! Тисніть кнопку.";
         });
     </script>
 
