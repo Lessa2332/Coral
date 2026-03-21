@@ -3,64 +3,59 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Підводний світ — 8th Wall WebAR</title>
+    <title>Підводний світ — Local WebAR</title>
 
-    <!-- 1. Основні бібліотеки -->
+    <!-- Бібліотеки рендерингу -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
     
-    <!-- 2. 8th Wall Engine (локальний файл з вашого репо) -->
+    <!-- ВАШ ЛОКАЛЬНИЙ БІНАРНИК -->
     <script src="xr.js"></script>
 
     <style>
-        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { margin: 0; overflow: hidden; font-family: sans-serif; background: #000; }
+        #overlay { position: absolute; z-index: 100; width: 100%; height: 100%; pointer-events: none; }
+        .ui { pointer-events: auto; }
         
-        /* UI Елементи */
-        #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
-        .ui-element { pointer-events: auto; }
-
         #enter-btn { 
             position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%);
-            padding: 20px 40px; font-size: 22px; background: #00bfff; color: white;
+            padding: 20px 40px; font-size: 20px; background: #00bfff; color: #fff;
             border: none; border-radius: 50px; cursor: pointer; font-weight: bold;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
         }
 
         #instruction { 
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            background: rgba(0,0,0,0.6); color: white; padding: 10px 20px;
-            border-radius: 20px; text-align: center; font-size: 16px;
+            position: absolute; top: 30px; width: 100%; text-align: center;
+            color: white; font-size: 18px; text-shadow: 0 2px 4px rgba(0,0,0,0.8);
         }
 
         #reticle { 
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 50px; height: 50px; border: 3px solid white; border-radius: 50%;
-            display: none; transition: all 0.2s;
+            width: 60px; height: 60px; border: 4px solid rgba(255,255,255,0.5);
+            border-radius: 50%; display: none;
         }
-        #reticle.ready { border-color: #00ffaa; box-shadow: 0 0 15px #00ffaa; scale: 1.2; }
-
+        .ready { border-color: #00ffaa !important; box-shadow: 0 0 20px #00ffaa; }
         .hidden { display: none !important; }
     </style>
 
     <script>
-        // ========== КОНФІГУРАЦІЯ 8TH WALL ==========
+        // 1. НАЛАШТУВАННЯ ШЛЯХІВ ДО ЛОКАЛЬНИХ РЕСУРСІВ (resources/)
         window.XR8Config = {
-            webWorkerPath: 'resources/media-worker.js',
-            tflitePath: 'resources/', // Шлях до .tflite файлів у вашому репо
+            webWorkerPath: location.href.substring(0, location.href.lastIndexOf("/")) + '/resources/media-worker.js',
+            tflitePath: location.href.substring(0, location.href.lastIndexOf("/")) + '/resources/',
+            device: { ANY: 'any' }
         };
 
-        // ========== КОМПОНЕНТ РУХУ РИБОК (Territory Swim) ==========
+        // 2. КОМПОНЕНТ РУХУ РИБОК
         AFRAME.registerComponent('territory-swim', {
-            schema: { speed: {type: 'float', default: 0.5}, radius: {type: 'float', default: 2} },
+            schema: { speed: {default: 0.5}, radius: {default: 2} },
             init: function () {
                 this.initialPos = this.el.object3D.position.clone();
                 this.angle = Math.random() * Math.PI * 2;
             },
-            tick: function (time, deltaTime) {
-                this.angle += (this.data.speed * deltaTime) / 1000;
-                const x = this.initialPos.x + Math.cos(this.angle) * this.data.radius;
-                const z = this.initialPos.z + Math.sin(this.angle) * this.data.radius;
-                this.el.object3D.position.set(x, this.el.object3D.position.y, z);
+            tick: function (t, dt) {
+                this.angle += (this.data.speed * dt) / 1000;
+                this.el.object3D.position.x = this.initialPos.x + Math.cos(this.angle) * this.data.radius;
+                this.el.object3D.position.z = this.initialPos.z + Math.sin(this.angle) * this.data.radius;
                 this.el.object3D.lookAt(
                     this.initialPos.x + Math.cos(this.angle + 0.1) * this.data.radius,
                     this.el.object3D.position.y,
@@ -69,85 +64,82 @@
             }
         });
 
-        // ========== КОМПОНЕНТ РОЗМІЩЕННЯ (Place on Tap) ==========
+        // 3. КОМПОНЕНТ РОЗМІЩЕННЯ (З ВИПРАВЛЕННЯМ ПОМИЛОК HITTEST)
         AFRAME.registerComponent('place-on-tap', {
             init: function () {
-                const scene = this.el;
-                const worldGroup = document.querySelector('#world-group');
-                const reticle = document.querySelector('#reticle');
-                const instruction = document.querySelector('#instruction');
                 this.placed = false;
+                this.world = document.querySelector('#world-group');
+                this.reticle = document.querySelector('#reticle');
 
-                scene.addEventListener('click', (event) => {
-                    if (this.placed) return;
+                this.el.addEventListener('click', () => {
+                    if (this.placed || !window.XR8 || !window.XR8.XrController) return;
 
-                    // Використовуємо Hit Test від 8th Wall
                     window.XR8.XrController.hitTest(0.5, 0.5, ['surface']).then((hits) => {
                         if (hits.length > 0) {
                             const hit = hits[0];
-                            worldGroup.object3D.position.copy(hit.position);
-                            worldGroup.object3D.quaternion.copy(hit.rotation);
-                            worldGroup.setAttribute('visible', 'true');
-                            
+                            this.world.object3D.position.copy(hit.position);
+                            this.world.object3D.quaternion.copy(hit.rotation);
+                            this.world.setAttribute('visible', 'true');
                             this.placed = true;
-                            reticle.style.display = 'none';
-                            instruction.innerHTML = "🐟 Океан активовано! Досліджуйте навколо.";
-                            setTimeout(() => instruction.style.display = 'none', 3000);
+                            this.reticle.style.display = 'none';
+                            document.querySelector('#instruction').innerHTML = "🌊 Океан активовано!";
                         }
                     });
                 });
             },
             tick: function() {
-                if (this.placed || !window.XR8) return;
-                
-                // Візуальна логіка ретикули
+                // ПЕРЕВІРКА: щоб не було помилки hitTest до старту камери
+                if (this.placed || !window.XR8 || !window.XR8.XrController) return;
+
                 window.XR8.XrController.hitTest(0.5, 0.5, ['surface']).then((hits) => {
-                    const r = document.querySelector('#reticle');
-                    if (hits.length > 0) r.classList.add('ready');
-                    else r.classList.remove('ready');
-                });
+                    if (hits.length > 0) this.reticle.classList.add('ready');
+                    else this.reticle.classList.remove('ready');
+                }).catch(() => {});
             }
         });
 
-        // ========== ЗАПУСК AR ==========
+        // 4. ЗАПУСК AR (ЧЕРЕЗ THREE.JS BRIDGE)
         function startAR() {
             const scene = document.querySelector('a-scene');
             const audio = document.getElementById('ocean-sound');
 
-            // 1. Налаштовуємо пайплайни (ОБОВ'ЯЗКОВО ДЛЯ 8TH WALL)
-            window.XR8.addCameraPipelineModules([
+            // Якщо XR8.AFrame відсутній, використовуємо Threejs пайплайн
+            const modules = [
                 window.XR8.GlTextureRenderer.pipelineModule(),
                 window.XR8.Threejs.pipelineModule(),
-                window.XR8.AFrame.pipelineModule(),
                 window.XR8.XrController.pipelineModule(),
-            ]);
+            ];
 
-            // 2. Запускаємо рушій
-            window.XR8.run({ 
+            // Додаємо підтримку A-Frame камери вручну, якщо метод відсутній
+            if (window.XR8.AFrame) {
+                modules.push(window.XR8.AFrame.pipelineModule());
+            }
+
+            window.XR8.addCameraPipelineModules(modules);
+
+            window.XR8.run({
                 canvas: scene.canvas,
-                allowedDevices: window.XR8.XrConfig.device().ANY 
+                allowedDevices: 'any'
             });
 
-            // 3. UI зміни
             document.getElementById('enter-btn').classList.add('hidden');
             document.getElementById('reticle').style.display = 'block';
-            document.getElementById('instruction').innerHTML = "Наведіть на підлогу і торкніться, щоб плюхнути рибок";
+            document.getElementById('instruction').innerHTML = "Знайдіть рівну поверхню";
             
-            audio.play().catch(e => console.log("Audio play failed", e));
+            if(audio) audio.play();
         }
     </script>
 </head>
 <body>
 
     <div id="overlay">
-        <div id="instruction" class="ui-element">Завантаження підводного світу...</div>
+        <div id="instruction" class="ui">Підводний світ чекає...</div>
         <div id="reticle"></div>
-        <button id="enter-btn" class="ui-element" onclick="startAR()">🐬 УВІЙТИ В AR</button>
+        <button id="enter-btn" class="ui" onclick="startAR()">🐬 УВІЙТИ В AR</button>
     </div>
 
     <audio id="ocean-sound" loop src="assets/sounds/okean.mp3"></audio>
 
-    <!-- Сцена A-Frame з інтеграцією 8th Wall -->
     <a-scene
         place-on-tap
         xr-mode-ui="enabled: false"
@@ -155,25 +147,19 @@
         renderer="colorManagement: true; antialias: true;">
 
         <a-assets>
-            <!-- Завантажуємо моделі з вашої структури папок -->
             <a-asset-item id="m1" src="assets/models/animal1.glb"></a-asset-item>
             <a-asset-item id="m2" src="assets/models/animal2.glb"></a-asset-item>
             <a-asset-item id="m3" src="assets/models/animal3.glb"></a-asset-item>
-            <a-asset-item id="m4" src="assets/models/animal4.glb"></a-asset-item>
-            <a-asset-item id="m5" src="assets/models/animal5.glb"></a-asset-item>
-            <a-asset-item id="m6" src="assets/models/animal6.glb"></a-asset-item>
-            <a-asset-item id="m7" src="assets/models/animal7.glb"></a-asset-item>
         </a-assets>
 
-        <a-camera position="0 1.6 0"></a-camera>
+        <!-- Камера, якою керуватиме 8th Wall -->
+        <a-camera id="camera" position="0 1.6 0"></a-camera>
 
-        <a-light type="ambient" intensity="0.7"></a-light>
+        <a-light type="ambient" intensity="0.8"></a-light>
         <a-light type="directional" position="1 5 2" intensity="1"></a-light>
 
-        <!-- Група світу, яка з'явиться після кліку -->
         <a-entity id="world-group" visible="false">
-            
-            <!-- Рибка 1 -->
+            <!-- Приклад розміщення рибок -->
             <a-entity 
                 gltf-model="#m1" 
                 position="0 1 -2" 
@@ -182,7 +168,6 @@
                 territory-swim="speed: 0.6; radius: 1.5">
             </a-entity>
 
-            <!-- Рибка 2 -->
             <a-entity 
                 gltf-model="#m2" 
                 position="1.5 0.5 -1" 
@@ -191,7 +176,6 @@
                 territory-swim="speed: 0.4; radius: 2.5">
             </a-entity>
 
-            <!-- Рибка 3 -->
             <a-entity 
                 gltf-model="#m3" 
                 position="-1 1.2 -3" 
@@ -199,25 +183,9 @@
                 animation-mixer="clip: *; loop: repeat"
                 territory-swim="speed: 0.8; radius: 1.2">
             </a-entity>
-
-            <!-- Додайте інші рибки аналогічно -->
-            <a-entity gltf-model="#m4" position="2 1.5 -4" scale="0.2 0.2 0.2" animation-mixer territory-swim></a-entity>
-            <a-entity gltf-model="#m5" position="-2 0.8 -2" scale="0.1 0.1 0.1" animation-mixer territory-swim></a-entity>
-
         </a-entity>
 
     </a-scene>
 
-    <script>
-        // Перевірка готовності 8th Wall
-        window.addEventListener('load', () => {
-            const check = setInterval(() => {
-                if (window.XR8) {
-                    clearInterval(check);
-                    document.getElementById('instruction').innerHTML = "Все готово! Тисніть кнопку.";
-                }
-            }, 500);
-        });
-    </script>
 </body>
 </html>
