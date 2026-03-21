@@ -3,15 +3,15 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Підводний світ — AR Local</title>
+    <title>Підводний світ AR</title>
 
-    <!-- Бібліотеки рендерингу -->
+    <!-- 1. Рендеринг -->
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
     
-    <!-- ПІДКЛЮЧАЄМО ВСІ ВАШІ БІНАРНИКИ (Порядок важливий) -->
+    <!-- 2. БІНАРНИКИ (Виправляємо помилку export) -->
     <script src="xr.js"></script>
-    <script src="xr-slam.js"></script> <!-- Тут лежить SLAM та Pipeline модулі -->
+    <script type="module" src="xr-slam.js"></script> <!-- Додано type="module" -->
 
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; background: #000; }
@@ -29,20 +29,20 @@
         #reticle { 
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             width: 60px; height: 60px; border: 4px solid rgba(255,255,255,0.5);
-            border-radius: 50%; display: none; pointer-events: none;
+            border-radius: 50%; display: none;
         }
         .ready { border-color: #00ffaa !important; box-shadow: 0 0 20px #00ffaa; }
         .hidden { display: none !important; }
     </style>
 
     <script>
-        // 1. КОНФІГУРАЦІЯ ШЛЯХІВ
+        // Шляхи до воркерів
         window.XR8Config = {
             webWorkerPath: 'resources/media-worker.js',
             tflitePath: 'resources/'
         };
 
-        // 2. КОМПОНЕНТ РИБОК
+        // Компонент плавання
         AFRAME.registerComponent('territory-swim', {
             schema: { speed: {default: 0.5}, radius: {default: 2} },
             init: function () {
@@ -61,7 +61,7 @@
             }
         });
 
-        // 3. КОМПОНЕНТ РОЗМІЩЕННЯ (БЕЗПЕЧНИЙ)
+        // Компонент кліку
         AFRAME.registerComponent('place-on-tap', {
             init: function () {
                 this.world = document.querySelector('#world-group');
@@ -69,6 +69,7 @@
                 this.placed = false;
 
                 this.el.addEventListener('click', () => {
+                    // Перевіряємо наявність XrController перед використанням
                     if (this.placed || !window.XR8 || !window.XR8.XrController) return;
 
                     window.XR8.XrController.hitTest(0.5, 0.5, ['surface']).then((hits) => {
@@ -79,13 +80,12 @@
                             this.world.setAttribute('visible', 'true');
                             this.placed = true;
                             this.reticle.style.display = 'none';
-                            document.querySelector('#instruction').innerHTML = "🐟 Океан тут!";
+                            document.querySelector('#instruction').innerHTML = "🐟 Океан розміщено!";
                         }
                     });
                 });
             },
             tick: function() {
-                // ПЕРЕВІРКА: чи існує XrController (прибираємо помилку null)
                 if (this.placed || !window.XR8 || !window.XR8.XrController) return;
 
                 window.XR8.XrController.hitTest(0.5, 0.5, ['surface']).then((hits) => {
@@ -95,33 +95,39 @@
             }
         });
 
-        // 4. ЗАПУСК AR (З ПЕРЕВІРКОЮ МОДУЛІВ)
-        function startAR() {
+        // Функція запуску (Викликається кнопкою)
+        window.startAR = function() {
             const scene = document.querySelector('a-scene');
             
             if (!window.XR8) {
-                alert("Рушій AR не завантажився!");
+                alert("Помилка: XR8 не завантажився. Перевірте консоль.");
                 return;
             }
 
-            // Динамічна перевірка наявності модулів, щоб уникнути TypeError
+            // Масив модулів, які ТОЧНО є в бінарнику
             const modules = [];
-            
-            if (window.XR8.GlTextureRenderer) modules.push(window.XR8.GlTextureRenderer.pipelineModule());
-            if (window.XR8.Threejs) modules.push(window.XR8.Threejs.pipelineModule());
-            if (window.XR8.XrController) modules.push(window.XR8.XrController.pipelineModule());
-            
-            // Якщо у вашій збірці є спеціальний модуль для AFrame
-            if (window.XR8.AFrame) modules.push(window.XR8.AFrame.pipelineModule());
 
-            if (modules.length === 0) {
-                console.error("Помилка: Модулі рушія не знайдені в xr.js або xr-slam.js");
-                alert("Помилка ініціалізації модулів. Перевірте консоль.");
-                return;
+            if (window.XR8.GlTextureRenderer) {
+                modules.push(window.XR8.GlTextureRenderer.pipelineModule());
+            }
+            
+            if (window.XR8.Threejs) {
+                modules.push(window.XR8.Threejs.pipelineModule());
             }
 
+            if (window.XR8.XrController) {
+                modules.push(window.XR8.XrController.pipelineModule());
+            }
+
+            // Якщо AFrame модуля немає, 8th Wall все одно працюватиме через Threejs міст
+            if (window.XR8.AFrame && typeof window.XR8.AFrame.pipelineModule === 'function') {
+                modules.push(window.XR8.AFrame.pipelineModule());
+            }
+
+            // Додаємо зібрані модулі
             window.XR8.addCameraPipelineModules(modules);
 
+            // Запуск
             window.XR8.run({
                 canvas: scene.canvas,
                 allowedDevices: 'any'
@@ -129,7 +135,7 @@
 
             document.getElementById('enter-btn').classList.add('hidden');
             document.getElementById('reticle').style.display = 'block';
-            document.getElementById('instruction').innerHTML = "Наведіть на підлогу";
+            document.getElementById('instruction').innerHTML = "Знайдіть поверхню підлоги";
             
             const audio = document.getElementById('ocean-sound');
             if (audio) audio.play();
@@ -139,9 +145,10 @@
 <body>
 
     <div id="overlay">
-        <div id="instruction" class="ui">Підводний світ завантажується...</div>
+        <div id="instruction" class="ui">Зачекайте, AR ініціалізується...</div>
         <div id="reticle"></div>
-        <button id="enter-btn" class="ui" onclick="startAR()">🐬 УВІЙТИ В AR</button>
+        <!-- Використовуємо window.startAR щоб уникнути проблем з областю видимості модулів -->
+        <button id="enter-btn" class="ui" onclick="window.startAR()">🐬 УВІЙТИ В AR</button>
     </div>
 
     <audio id="ocean-sound" loop src="assets/sounds/okean.mp3"></audio>
@@ -158,6 +165,7 @@
         </a-assets>
 
         <a-camera id="camera" position="0 1.6 0"></a-camera>
+
         <a-light type="ambient" intensity="0.8"></a-light>
         <a-light type="directional" position="1 5 2" intensity="1"></a-light>
 
@@ -167,6 +175,18 @@
         </a-entity>
 
     </a-scene>
+
+    <script>
+        // Перевірка завантаження модулів
+        window.addEventListener('load', () => {
+            const check = setInterval(() => {
+                if (window.XR8) {
+                    clearInterval(check);
+                    document.getElementById('instruction').innerHTML = "Все готово! Натисніть кнопку.";
+                }
+            }, 500);
+        });
+    </script>
 
 </body>
 </html>
