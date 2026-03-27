@@ -9,10 +9,8 @@
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
 
-    <!-- 8th Wall Standalone (з твоєї папки) -->
+    <!-- 8th Wall Standalone - ТІЛЬКИ базовий xr.js -->
     <script src="xr-standalone/xr.js"></script>
-    <!-- Якщо хочеш SLAM (пошук поверхні підлоги) — підключи -->
-    <script src="xr-standalone/xr-slam.js"></script>
 
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
@@ -37,13 +35,12 @@
     </style>
 
     <script>
-        // Конфігурація для standalone
         window.XR8Config = {
             webWorkerPath: 'resources/media-worker.js',
             tflitePath: 'resources/'
         };
 
-        // Компонент для плавання риб
+        // Компонент плавання риб
         AFRAME.registerComponent('territory-swim', {
             schema: { speed: {default: 0.45}, radius: {default: 3.5}, height: {default: 0.8} },
             init: function () {
@@ -66,7 +63,7 @@
             }
         });
 
-        // Компонент розміщення по тапу (SLAM)
+        // Компонент Tap to Place
         AFRAME.registerComponent('place-on-tap', {
             init: function () {
                 this.world = document.querySelector('#world-group');
@@ -86,7 +83,7 @@
                             this.reticle.style.display = 'none';
                             document.getElementById('instruction').innerHTML = "🐟 Підводний світ розміщено!";
                         }
-                    });
+                    }).catch(console.error);
                 });
             },
             tick: function () {
@@ -119,7 +116,6 @@
             <a-asset-item id="m2" src="assets/models/animal2.glb"></a-asset-item>
             <a-asset-item id="m3" src="assets/models/animal3.glb"></a-asset-item>
             <a-asset-item id="m4" src="assets/models/animal4.glb"></a-asset-item>
-            <!-- Додай m5, m6, m7 коли захочеш -->
         </a-assets>
 
         <a-camera position="0 1.6 0"></a-camera>
@@ -141,9 +137,12 @@
             const cameraEl = document.querySelector('a-camera');
             const threeCamera = cameraEl.getObject3D('camera');
 
-            if (!window.XR8 || !threeCamera) {
-                alert("XR8 не завантажився. Перевір консоль (F12)");
-                console.error("XR8 або камера не знайдені");
+            if (!window.XR8) {
+                alert("XR8 не завантажився. Перевір консоль (F12) і структуру папок.");
+                return;
+            }
+            if (!threeCamera) {
+                console.error("Камера A-Frame ще не готова");
                 return;
             }
 
@@ -162,20 +161,22 @@
                     allowedDevices: 'any'
                 });
 
+                // Успішний запуск
                 document.getElementById('enter-btn').classList.add('hidden');
                 document.getElementById('reticle').style.display = 'block';
                 document.getElementById('instruction').textContent = "Наведи на підлогу та тапни";
 
                 document.getElementById('ocean-sound').play().catch(() => {});
+                console.log("✅ AR успішно запущено");
             } catch (err) {
                 console.error("Помилка запуску AR:", err);
-                document.getElementById('instruction').innerHTML = "Помилка запуску. Перевір консоль";
+                document.getElementById('instruction').innerHTML = "Помилка запуску AR.<br>Перевір консоль (F12)";
             }
         }
 
-        // Повідомлення після завантаження сцени
+        // Чекаємо повного завантаження сцени
         document.querySelector('a-scene').addEventListener('loaded', () => {
-            document.getElementById('instruction').textContent = "Готово! Натисни кнопку нижче";
+            document.getElementById('instruction').textContent = "Готово! Натисни кнопку нижче 👇";
         });
     </script>
 </body>
