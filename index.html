@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Підводний світ AR</title>
 
-    <!-- A-Frame -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
 
-    <!-- 8th Wall Standalone - ТІЛЬКИ базовий xr.js -->
+    <!-- 8th Wall Standalone -->
     <script src="xr-standalone/xr.js"></script>
+    <script type="module" src="xr-standalone/xr-slam.js"></script>
 
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
@@ -40,7 +40,7 @@
             tflitePath: 'resources/'
         };
 
-        // Компонент плавання риб
+        // Компонент плавання
         AFRAME.registerComponent('territory-swim', {
             schema: { speed: {default: 0.45}, radius: {default: 3.5}, height: {default: 0.8} },
             init: function () {
@@ -71,8 +71,10 @@
                 this.placed = false;
 
                 this.el.addEventListener('click', () => {
-                    if (this.placed || !window.XR8?.XrController) return;
-
+                    if (this.placed || !window.XR8?.XrController) {
+                        console.warn("XrController ще не готовий");
+                        return;
+                    }
                     window.XR8.XrController.hitTest(0.5, 0.5, ['surface']).then(hits => {
                         if (hits && hits.length > 0) {
                             const hit = hits[0];
@@ -98,7 +100,7 @@
 </head>
 <body>
     <div id="overlay">
-        <div id="instruction" class="ui">Завантаження AR...</div>
+        <div id="instruction" class="ui">Завантаження SLAM...</div>
         <div id="reticle"></div>
         <button id="enter-btn" class="ui" onclick="startAR()">🐬 УВІЙТИ В ПІДВОДНИЙ СВІТ</button>
     </div>
@@ -131,18 +133,34 @@
         </a-entity>
     </a-scene>
 
-    <script>
+    <script type="module">
+        // Головна функція запуску (як модуль)
         async function startAR() {
             const scene = document.querySelector('a-scene');
             const cameraEl = document.querySelector('a-camera');
             const threeCamera = cameraEl.getObject3D('camera');
 
             if (!window.XR8) {
-                alert("XR8 не завантажився. Перевір консоль (F12) і структуру папок.");
+                alert("XR8 не завантажився. Перевір консоль.");
                 return;
             }
             if (!threeCamera) {
-                console.error("Камера A-Frame ще не готова");
+                console.error("Камера ще не готова");
+                return;
+            }
+
+            // Чекаємо, поки XrController стане доступним
+            let attempts = 0;
+            const maxAttempts = 30;
+
+            while (!window.XR8.XrController && attempts < maxAttempts) {
+                await new Promise(r => setTimeout(r, 200));
+                attempts++;
+            }
+
+            if (!window.XR8.XrController) {
+                console.error("XrController так і не з'явився після 6 секунд");
+                document.getElementById('instruction').innerHTML = "Помилка: SLAM не запустився";
                 return;
             }
 
@@ -150,7 +168,7 @@
                 const pipelineModules = [
                     XR8.GlTextureRenderer.pipelineModule(),
                     XR8.Threejs.pipelineModule(),
-                    XR8.XrController.pipelineModule()
+                    XR8.XrController.pipelineModule()   // Тепер має бути доступний
                 ];
 
                 XR8.addCameraPipelineModules(pipelineModules);
@@ -161,22 +179,24 @@
                     allowedDevices: 'any'
                 });
 
-                // Успішний запуск
                 document.getElementById('enter-btn').classList.add('hidden');
                 document.getElementById('reticle').style.display = 'block';
                 document.getElementById('instruction').textContent = "Наведи на підлогу та тапни";
 
                 document.getElementById('ocean-sound').play().catch(() => {});
-                console.log("✅ AR успішно запущено");
+                console.log("✅ AR + SLAM успішно запущено");
             } catch (err) {
                 console.error("Помилка запуску AR:", err);
-                document.getElementById('instruction').innerHTML = "Помилка запуску AR.<br>Перевір консоль (F12)";
+                document.getElementById('instruction').innerHTML = "Помилка запуску. Дивись консоль (F12)";
             }
         }
 
-        // Чекаємо повного завантаження сцени
+        window.startAR = startAR;   // робимо доступною для кнопки
+    </script>
+
+    <script>
         document.querySelector('a-scene').addEventListener('loaded', () => {
-            document.getElementById('instruction').textContent = "Готово! Натисни кнопку нижче 👇";
+            document.getElementById('instruction').textContent = "Готово! Натисни кнопку 👇";
         });
     </script>
 </body>
