@@ -6,8 +6,8 @@
   <title>Підводний світ AR</title>
   <style>
     body { margin:0; overflow:hidden; background:#000; }
-    #overlay { 
-      position:absolute; inset:0; z-index:100; pointer-events:none; 
+    #overlay {
+      position:absolute; inset:0; z-index:100; pointer-events:none;
       display:flex; flex-direction:column; justify-content:center; align-items:center; color:white;
     }
     #btn {
@@ -15,9 +15,9 @@
       border:none; border-radius:50px; box-shadow:0 8px 30px rgba(0,191,255,0.6);
       font-weight:bold; pointer-events:auto;
     }
-    #text { 
-      margin-bottom:40px; font-size:21px; text-align:center; 
-      text-shadow:0 2px 10px #000; 
+    #text {
+      margin-bottom:40px; font-size:21px; text-align:center;
+      text-shadow:0 2px 10px #000;
     }
     canvas { display:block; }
   </style>
@@ -33,10 +33,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
   <script src="https://unpkg.com/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
 
-  <!-- Кастомний модуль Three.js (глобальна функція) -->
-  <script src="customThreejsModule.js"></script>
-
-  <!-- Конфігурація xr-standalone (правильні шляхи) -->
+  <!-- Конфігурація xr-standalone – ПЕРЕД завантаженням xr.js -->
   <script>
     window.XR8Config = {
       webWorkerPath: 'xr-standalone/resources/media-worker.js',
@@ -44,26 +41,20 @@
     };
   </script>
 
-  <!-- Завантажуємо xr-standalone як класичні скрипти -->
+  <!-- xr-standalone (звичайні скрипти, без модулів) -->
   <script src="xr-standalone/xr.js"></script>
   <script src="xr-standalone/xr-slam.js"></script>
 
-  <!-- Основний код – ES модуль, який чекає на XR8 -->
-  <script type="module">
-    // Чекаємо, поки XR8 з'явиться в глобальному об'єкті
-    let waitForXR8 = setInterval(() => {
-      if (window.XR8 && window.XR8.GlTextureRenderer && window.XR8.XrController) {
-        clearInterval(waitForXR8);
-        console.log('XR8 ready');
-        init();
-      }
-    }, 100);
+  <!-- Кастомний модуль Three.js (глобальна функція) – він буде використаний замість стандартного -->
+  <script src="customThreejsModule.js"></script>
 
+  <script>
     let xrSceneRef = null;
     let worldGroup = null;
     let models = [];
     let placed = false;
 
+    // Завантаження моделі GLB
     async function loadModel(url, scale = 0.23) {
       return new Promise(resolve => {
         const loader = new THREE.GLTFLoader();
@@ -82,6 +73,7 @@
       });
     }
 
+    // Анімація рибок
     const animateFish = () => {
       const t = Date.now() * 0.001;
       models.forEach((m, i) => {
@@ -113,13 +105,27 @@
       });
     };
 
-    const threeModule = window.customThreejsPipelineModule();
+    // Створюємо кастомний модуль Three.js
+    const threeModule = customThreejsPipelineModule();
 
-    async function init() {
+    async function startAR() {
       const btn = document.getElementById('btn');
       const text = document.getElementById('text');
       btn.style.display = 'none';
       text.innerHTML = "Запуск AR...";
+
+      // Чекаємо готовності XR8 та модулів
+      let attempts = 0;
+      while ((!window.XR8 || !XR8.GlTextureRenderer || !XR8.XrController) && attempts < 80) {
+        await new Promise(r => setTimeout(r, 120));
+        attempts++;
+      }
+
+      if (!window.XR8 || !XR8.GlTextureRenderer || !XR8.XrController) {
+        text.innerHTML = "Помилка: XR8 модулі не завантажились";
+        console.error("XR8 modules missing", window.XR8);
+        return;
+      }
 
       try {
         // Додаємо модулі конвеєра
@@ -188,6 +194,7 @@
             return;
           }
 
+          // Реакція на дотик: рибки "тікають"
           const touchX = (x - 0.5) * 8;
           const touchZ = (y - 0.5) * 8;
           models.forEach(m => {
@@ -200,6 +207,7 @@
           });
         });
 
+        // Розширюємо onUpdate для анімації рибок
         const originalOnUpdate = threeModule.onUpdate;
         threeModule.onUpdate = (params) => {
           originalOnUpdate(params);
@@ -212,13 +220,7 @@
       }
     }
 
-    document.getElementById('btn').onclick = () => {
-      if (window.XR8 && window.XR8.GlTextureRenderer && window.XR8.XrController) {
-        init();
-      } else {
-        alert('XR8 ще не завантажено, зачекайте...');
-      }
-    };
+    document.getElementById('btn').onclick = startAR;
   </script>
 </body>
 </html>
