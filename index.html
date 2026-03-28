@@ -8,126 +8,102 @@
     <script src="xr-standalone/xr.js"></script>
 
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
-        #overlay { 
-            position: absolute; inset: 0; z-index: 100; pointer-events: none; 
-            display: flex; flex-direction: column; justify-content: center; align-items: center; color: white;
+        body { margin:0; overflow:hidden; background:#000; font-family:sans-serif; }
+        #overlay {
+            position:absolute; inset:0; z-index:100; pointer-events:none;
+            display:flex; flex-direction:column; justify-content:center; align-items:center; color:white;
         }
         #enter-btn {
-            padding: 22px 65px; font-size: 24px; background: #00bfff; color: white;
-            border: none; border-radius: 50px; box-shadow: 0 8px 30px rgba(0,191,255,0.6);
-            font-weight: bold; cursor: pointer; pointer-events: auto;
+            padding:22px 70px; font-size:24px; background:#00bfff; color:white;
+            border:none; border-radius:50px; box-shadow:0 8px 30px rgba(0,191,255,0.6);
+            font-weight:bold; pointer-events:auto; cursor:pointer;
         }
-        #instruction { 
-            margin-bottom: 40px; font-size: 21px; text-shadow: 0 2px 10px #000; text-align: center; 
-        }
-        canvas { display: block; }
+        #instruction { margin-bottom:40px; font-size:21px; text-align:center; text-shadow:0 2px 10px #000; }
+        canvas { display:block; }
     </style>
 </head>
 <body>
     <div id="overlay">
-        <div id="instruction">Підготовка підводного світу...</div>
-        <button id="enter-btn">🐬 УВІЙТИ В ПІДВОДНИЙ СВІТ</button>
+        <div id="instruction">Підготовка AR...</div>
+        <button id="enter-btn" onclick="startAR()">🐬 УВІЙТИ В ПІДВОДНИЙ СВІТ</button>
     </div>
 
     <audio id="ocean-sound" loop src="assets/sounds/okean.mp3"></audio>
 
-    <script type="module">
-        import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js';
-        import { GLTFLoader } from 'https://unpkg.com/three@0.134.0/examples/jsm/loaders/GLTFLoader.js';
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
 
-        let scene, camera, renderer;
-        let worldGroup = new THREE.Group();
-        let models = [];
-
+    <script>
         window.XR8Config = {
             webWorkerPath: 'resources/media-worker.js',
             tflitePath: 'resources/'
         };
 
+        let scene, camera, renderer, worldGroup;
+        let models = [];
+
         async function loadModel(url, scale = 0.25) {
-            return new Promise((resolve) => {
-                const loader = new GLTFLoader();
-                loader.load(url, (gltf) => {
+            return new Promise(resolve => {
+                const loader = new THREE.GLTFLoader();
+                loader.load(url, gltf => {
                     const model = gltf.scene;
                     model.scale.set(scale, scale, scale);
-                    model.userData = { 
-                        angle: Math.random() * Math.PI * 2, 
-                        radius: 3.5 + Math.random() * 1.5,
-                        speed: 0.4 + Math.random() * 0.3
-                    };
+                    model.userData = { angle: Math.random()*Math.PI*2, radius: 3.5 };
                     resolve(model);
-                }, undefined, (err) => {
-                    console.error('Помилка моделі:', url, err);
-                    resolve(null);
-                });
+                }, undefined, () => resolve(null));
             });
-        }
-
-        async function initThree() {
-            const canvas = document.createElement('canvas');
-            document.body.appendChild(canvas);
-
-            renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-
-            scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-            camera.position.set(0, 1.6, 0);
-
-            scene.add(new THREE.AmbientLight(0x88ccff, 0.9));
-            const dirLight = new THREE.DirectionalLight(0xffffff, 1.1);
-            dirLight.position.set(5, 10, 8);
-            scene.add(dirLight);
-
-            scene.add(worldGroup);
-
-            // Завантажуємо моделі
-            const paths = [
-                'assets/models/animal1.glb',
-                'assets/models/animal2.glb',
-                'assets/models/animal3.glb',
-                'assets/models/animal4.glb'
-            ];
-
-            for (let path of paths) {
-                const model = await loadModel(path, 0.23);
-                if (model) {
-                    model.position.set((Math.random()-0.5)*5, 1 + Math.random()*2, -4 - Math.random()*4);
-                    worldGroup.add(model);
-                    models.push(model);
-                }
-            }
         }
 
         function animate() {
             requestAnimationFrame(animate);
-            const time = Date.now() * 0.001;
+            const t = Date.now() * 0.001;
 
-            models.forEach((model, i) => {
-                if (!model.userData.angle) return;
-                model.userData.angle += model.userData.speed * 0.015;
-                const r = model.userData.radius;
-
-                model.position.x = Math.cos(model.userData.angle + i) * r;
-                model.position.z = Math.sin(model.userData.angle + i) * r - 3;
-                model.position.y = 1.2 + Math.sin(time * 1.5 + i) * 0.9;
-
-                model.lookAt(0, model.position.y, -2);
+            models.forEach((m, i) => {
+                if (!m.userData.angle) return;
+                m.userData.angle += 0.012;
+                const r = m.userData.radius;
+                m.position.x = Math.cos(m.userData.angle + i) * r;
+                m.position.z = Math.sin(m.userData.angle + i) * r - 4;
+                m.position.y = 1.5 + Math.sin(t + i*2) * 0.8;
+                m.lookAt(0, m.position.y, 0);
             });
 
-            if (renderer && scene && camera) renderer.render(scene, camera);
+            if (renderer) renderer.render(scene, camera);
         }
 
         async function startAR() {
-            const btn = document.getElementById('enter-btn');
             const instr = document.getElementById('instruction');
+            instr.textContent = "Запуск камери...";
 
-            instr.textContent = "Запуск AR...";
-            btn.disabled = true;
+            // Створюємо Three.js сцену
+            const canvas = document.createElement('canvas');
+            document.body.appendChild(canvas);
 
-            await initThree();
+            renderer = new THREE.WebGLRenderer({canvas, antialias: true});
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
+            camera.position.set(0, 1.6, 0);
+
+            scene.add(new THREE.AmbientLight(0x88ccff, 0.9));
+            scene.add(new THREE.DirectionalLight(0xffffff, 1));
+
+            worldGroup = new THREE.Group();
+            scene.add(worldGroup);
+
+            // Завантажуємо моделі
+            const paths = ['assets/models/animal1.glb', 'assets/models/animal2.glb', 
+                          'assets/models/animal3.glb', 'assets/models/animal4.glb'];
+
+            for (let p of paths) {
+                const model = await loadModel(p, 0.25);
+                if (model) {
+                    model.position.set(0, 1, -4);
+                    worldGroup.add(model);
+                    models.push(model);
+                }
+            }
 
             try {
                 XR8.addCameraPipelineModules([
@@ -143,21 +119,18 @@
                 });
 
                 worldGroup.visible = true;
-                btn.style.display = 'none';
-                instr.innerHTML = "✅ Підводний світ активовано!<br>Рухай телефоном 🐟";
+                document.getElementById('enter-btn').style.display = 'none';
+                instr.innerHTML = "✅ AR запущено!<br>Рухай телефоном";
 
                 document.getElementById('ocean-sound').play().catch(() => {});
                 animate();
 
-                console.log("✅ Three.js + 8th Wall запущено успішно");
-
-            } catch (err) {
-                console.error("Помилка запуску AR:", err);
-                instr.innerHTML = "Помилка запуску AR.<br>Перевір консоль (F12)";
+            } catch (e) {
+                console.error(e);
+                instr.textContent = "Помилка запуску AR";
             }
         }
 
-        // Робимо функцію глобальною
         window.startAR = startAR;
     </script>
 </body>
