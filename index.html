@@ -8,24 +8,24 @@
     <script src="xr-standalone/xr.js"></script>
 
     <style>
-        body { margin:0; overflow:hidden; background:#000; font-family:sans-serif; }
-        #overlay {
-            position:absolute; inset:0; z-index:100; pointer-events:none;
+        body { margin:0; overflow:hidden; background:#000; }
+        #overlay { 
+            position:absolute; inset:0; z-index:100; pointer-events:none; 
             display:flex; flex-direction:column; justify-content:center; align-items:center; color:white;
         }
         #enter-btn {
             padding:22px 70px; font-size:24px; background:#00bfff; color:white;
             border:none; border-radius:50px; box-shadow:0 8px 30px rgba(0,191,255,0.6);
-            font-weight:bold; pointer-events:auto; cursor:pointer;
+            font-weight:bold; pointer-events:auto;
         }
-        #instruction { margin-bottom:40px; font-size:21px; text-align:center; text-shadow:0 2px 10px #000; }
+        #instruction { margin-bottom:30px; font-size:20px; text-align:center; text-shadow:0 2px 10px #000; }
         canvas { display:block; }
     </style>
 </head>
 <body>
     <div id="overlay">
-        <div id="instruction">Підготовка AR...</div>
-        <button id="enter-btn" onclick="startAR()">🐬 УВІЙТИ В ПІДВОДНИЙ СВІТ</button>
+        <div id="instruction">Натисни кнопку для запуску AR</div>
+        <button id="enter-btn" onclick="startAR()">🐬 ЗАПУСТИТИ ПІДВОДНИЙ СВІТ</button>
     </div>
 
     <audio id="ocean-sound" loop src="assets/sounds/okean.mp3"></audio>
@@ -41,6 +41,7 @@
 
         let scene, camera, renderer, worldGroup;
         let models = [];
+        let isPlaced = false;
 
         async function loadModel(url, scale = 0.25) {
             return new Promise(resolve => {
@@ -48,7 +49,7 @@
                 loader.load(url, gltf => {
                     const model = gltf.scene;
                     model.scale.set(scale, scale, scale);
-                    model.userData = { angle: Math.random()*Math.PI*2, radius: 3.5 };
+                    model.userData = { angle: Math.random()*Math.PI*2, radius: 3 + Math.random()*2 };
                     resolve(model);
                 }, undefined, () => resolve(null));
             });
@@ -60,22 +61,22 @@
 
             models.forEach((m, i) => {
                 if (!m.userData.angle) return;
-                m.userData.angle += 0.012;
+                m.userData.angle += 0.015;
                 const r = m.userData.radius;
                 m.position.x = Math.cos(m.userData.angle + i) * r;
-                m.position.z = Math.sin(m.userData.angle + i) * r - 4;
-                m.position.y = 1.5 + Math.sin(t + i*2) * 0.8;
-                m.lookAt(0, m.position.y, 0);
+                m.position.z = Math.sin(m.userData.angle + i) * r - 3;
+                m.position.y = 1 + Math.sin(t + i) * 0.8;
+                m.lookAt(0, m.position.y, -3);
             });
 
             if (renderer) renderer.render(scene, camera);
         }
 
         async function startAR() {
-            const instr = document.getElementById('instruction');
-            instr.textContent = "Запуск камери...";
+            document.getElementById('instruction').innerHTML = "Запуск камери...";
+            document.getElementById('enter-btn').style.display = 'none';
 
-            // Створюємо Three.js сцену
+            // Ініціалізація Three.js
             const canvas = document.createElement('canvas');
             document.body.appendChild(canvas);
 
@@ -83,28 +84,30 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
 
             scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
             camera.position.set(0, 1.6, 0);
 
             scene.add(new THREE.AmbientLight(0x88ccff, 0.9));
-            scene.add(new THREE.DirectionalLight(0xffffff, 1));
+            const light = new THREE.DirectionalLight(0xffffff, 1.2);
+            light.position.set(5, 10, 8);
+            scene.add(light);
 
             worldGroup = new THREE.Group();
             scene.add(worldGroup);
 
-            // Завантажуємо моделі
-            const paths = ['assets/models/animal1.glb', 'assets/models/animal2.glb', 
-                          'assets/models/animal3.glb', 'assets/models/animal4.glb'];
+            // Завантаження моделей
+            const paths = ['assets/models/animal1.glb','assets/models/animal2.glb',
+                           'assets/models/animal3.glb','assets/models/animal4.glb'];
 
             for (let p of paths) {
-                const model = await loadModel(p, 0.25);
+                const model = await loadModel(p, 0.24);
                 if (model) {
-                    model.position.set(0, 1, -4);
-                    worldGroup.add(model);
                     models.push(model);
+                    worldGroup.add(model);
                 }
             }
 
+            // Запуск 8th Wall
             try {
                 XR8.addCameraPipelineModules([
                     XR8.GlTextureRenderer.pipelineModule(),
@@ -119,15 +122,23 @@
                 });
 
                 worldGroup.visible = true;
-                document.getElementById('enter-btn').style.display = 'none';
-                instr.innerHTML = "✅ AR запущено!<br>Рухай телефоном";
+                document.getElementById('instruction').innerHTML = "✅ AR запущено!<br>Тапни на екран, щоб розмістити світ на підлозі";
 
                 document.getElementById('ocean-sound').play().catch(() => {});
                 animate();
 
+                // Додаємо tap-to-place
+                canvas.addEventListener('touchstart', (e) => {
+                    if (isPlaced) return;
+                    isPlaced = true;
+                    // Просте переміщення групи в центр видимої області
+                    worldGroup.position.set(0, -1.5, -4);
+                    document.getElementById('instruction').innerHTML = "🐟 Світ розміщено! Рухай телефоном";
+                });
+
             } catch (e) {
                 console.error(e);
-                instr.textContent = "Помилка запуску AR";
+                document.getElementById('instruction').innerHTML = "Помилка запуску";
             }
         }
 
