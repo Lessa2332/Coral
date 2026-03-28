@@ -27,7 +27,7 @@
 </head>
 <body>
     <div id="overlay">
-        <div id="text">Натисни кнопку → наведи на підлогу → тапни</div>
+        <div id="text">Завантаження 8th Wall...</div>
         <button id="btn">🐬 УВІЙТИ В ПІДВОДНИЙ СВІТ</button>
     </div>
 
@@ -86,7 +86,7 @@
             });
         };
 
-        // Основний модуль
+        // Основний Three.js модуль
         const threeModule = XR8.Threejs.pipelineModule({
             onStart: ({ canvas }) => {
                 xrSceneRef = XR8.Threejs.xrScene();
@@ -104,7 +104,6 @@
                 scene.add(worldGroup);
                 worldGroup.visible = false;
 
-                // Завантаження моделей
                 const paths = [
                     'assets/models/animal1.glb',
                     'assets/models/animal2.glb',
@@ -122,40 +121,25 @@
                         });
                     });
 
-                // Tap to Place + реакція на тап
                 canvas.addEventListener('touchstart', (e) => {
-                    if (!xrSceneRef) return;
+                    if (placed || !xrSceneRef) return;
 
                     const touch = e.touches[0];
                     const x = touch.clientX / window.innerWidth;
                     const y = touch.clientY / window.innerHeight;
 
-                    if (!placed) {
-                        const hits = XR8.XrController.hitTest(x, y, ['surface']);
-                        if (hits && hits.length > 0) {
-                            const h = hits[0];
-                            worldGroup.position.copy(h.position);
-                            worldGroup.quaternion.copy(h.rotation);
-                            worldGroup.visible = true;
-                            placed = true;
+                    const hits = XR8.XrController.hitTest(x, y, ['surface']);
 
-                            document.getElementById('text').innerHTML = "✅ Рибки з'явились! Торкнись їх 🐟";
-                            document.getElementById('sound').play().catch(() => {});
-                        }
-                        return;
+                    if (hits && hits.length > 0) {
+                        const h = hits[0];
+                        worldGroup.position.copy(h.position);
+                        worldGroup.quaternion.copy(h.rotation);
+                        worldGroup.visible = true;
+                        placed = true;
+
+                        document.getElementById('text').innerHTML = "✅ Рибки з'явились! Торкнись їх 🐟";
+                        document.getElementById('sound').play().catch(() => {});
                     }
-
-                    // Реакція на тап (рибки тікають)
-                    const touchX = (x - 0.5) * 8;
-                    const touchZ = (y - 0.5) * 8;
-                    models.forEach(m => {
-                        const dx = m.position.x - touchX;
-                        const dz = m.position.z - touchZ;
-                        const dist = Math.sqrt(dx*dx + dz*dz) + 0.001;
-                        const force = 0.18 / dist;
-                        m.userData.vx = (m.userData.vx || 0) + dx * force;
-                        m.userData.vz = (m.userData.vz || 0) + dz * force;
-                    });
                 });
             },
             onUpdate: () => {
@@ -168,17 +152,22 @@
             const text = document.getElementById('text');
 
             btn.style.display = 'none';
-            text.innerHTML = "Запуск 8th Wall...";
+            text.innerHTML = "Очікування 8th Wall...";
 
-            // Чекаємо готовності XR8
+            // Максимальне очікування завантаження XR8
             let attempts = 0;
-            while ((!window.XR8 || !XR8.Threejs || !XR8.XrController) && attempts < 80) {
+            const maxAttempts = 100; // ~12 секунд
+
+            while (attempts < maxAttempts) {
+                if (window.XR8 && XR8.GlTextureRenderer && XR8.Threejs && XR8.XrController) {
+                    break;
+                }
                 await new Promise(r => setTimeout(r, 120));
                 attempts++;
             }
 
-            if (!window.XR8) {
-                text.innerHTML = "Не вдалося завантажити 8th Wall";
+            if (!window.XR8 || !XR8.GlTextureRenderer) {
+                text.innerHTML = "Не вдалося завантажити 8th Wall.<br>Перезавантаж сторінку.";
                 return;
             }
 
@@ -195,11 +184,12 @@
                 });
 
             } catch (err) {
-                console.error(err);
+                console.error("Помилка запуску AR:", err);
                 text.innerHTML = "Помилка запуску AR";
             }
         }
 
+        // Прив'язка кнопки
         document.getElementById('btn').onclick = startAR;
     </script>
 </body>
