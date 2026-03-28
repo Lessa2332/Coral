@@ -31,20 +31,23 @@
 
     <audio id="sound" loop src="assets/sounds/okean.mp3"></audio>
 
-    <!-- Classic scripts для Three.js та GLTFLoader -->
+    <!-- Three.js та GLTFLoader – класичні скрипти -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
     <script src="https://unpkg.com/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
 
-    <!-- Кастомний модуль Three.js (класичний скрипт) -->
+    <!-- xr-standalone – завантажуємо як модулі, щоб підтримувати 'export' -->
+    <script type="module" src="xr-standalone/xr.js"></script>
+    <script type="module" src="xr-standalone/xr-slam.js"></script>
+
+    <!-- Кастомний модуль Three.js (класичний скрипт, без модулів) -->
     <script src="customThreejsModule.js"></script>
 
-    <!-- Основний код – як ES модуль -->
+    <!-- Основний код – ES модуль, щоб мати доступ до імпортованого XR8 -->
     <script type="module">
-        // Імпортуємо необхідні модулі xr-standalone
+        // Імпортуємо XR8 із xr.js (він експортує XR8 за замовчуванням)
         import XR8 from './xr-standalone/xr.js';
-        import './xr-standalone/xr-slam.js'; // додає модулі SLAM
-
-        // Переконуємося, що XR8Config встановлено до ініціалізації
+        
+        // Налаштовуємо конфігурацію xr-standalone
         window.XR8Config = {
             webWorkerPath: 'resources/media-worker.js',
             tflitePath: 'resources/'
@@ -120,7 +123,7 @@
             btn.style.display = 'none';
             text.innerHTML = "Запуск AR...";
 
-            // Чекаємо готовності XR8 та модулів
+            // Чекаємо, поки XR8 та необхідні модулі стануть доступними
             let attempts = 0;
             while ((!XR8 || !XR8.GlTextureRenderer || !XR8.XrController) && attempts < 80) {
                 await new Promise(r => setTimeout(r, 120));
