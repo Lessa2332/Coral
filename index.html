@@ -5,10 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Підводний світ AR</title>
 
-    <!-- xr-standalone (відкритий код) -->
-    <script src="xr-standalone/xr.js"></script>
-    <script src="xr-standalone/xr-slam.js"></script>   <!-- ДОДАНО: забезпечує модулі SLAM -->
-
     <style>
         body { margin:0; overflow:hidden; background:#000; }
         #overlay { 
@@ -35,15 +31,20 @@
 
     <audio id="sound" loop src="assets/sounds/okean.mp3"></audio>
 
-    <!-- Three.js та GLTFLoader (глобальні) -->
+    <!-- Classic scripts для Three.js та GLTFLoader -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
     <script src="https://unpkg.com/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
 
-    <!-- Кастомний модуль Three.js -->
+    <!-- Кастомний модуль Three.js (класичний скрипт) -->
     <script src="customThreejsModule.js"></script>
 
-    <script>
-        // Налаштування шляхів для xr-standalone (використовуємо кореневу папку resources)
+    <!-- Основний код – як ES модуль -->
+    <script type="module">
+        // Імпортуємо необхідні модулі xr-standalone
+        import XR8 from './xr-standalone/xr.js';
+        import './xr-standalone/xr-slam.js'; // додає модулі SLAM
+
+        // Переконуємося, що XR8Config встановлено до ініціалізації
         window.XR8Config = {
             webWorkerPath: 'resources/media-worker.js',
             tflitePath: 'resources/'
@@ -109,8 +110,8 @@
             });
         };
 
-        // Створюємо кастомний модуль Three.js (замість стандартного)
-        const threeModule = customThreejsPipelineModule();
+        // Створюємо кастомний модуль Three.js (глобальна функція з customThreejsModule.js)
+        const threeModule = window.customThreejsPipelineModule();
 
         async function startAR() {
             const btn = document.getElementById('btn');
@@ -119,14 +120,14 @@
             btn.style.display = 'none';
             text.innerHTML = "Запуск AR...";
 
-            // Чекаємо готовності XR8 та необхідних модулів
+            // Чекаємо готовності XR8 та модулів
             let attempts = 0;
-            while ((!window.XR8 || !XR8.GlTextureRenderer || !XR8.XrController) && attempts < 80) {
+            while ((!XR8 || !XR8.GlTextureRenderer || !XR8.XrController) && attempts < 80) {
                 await new Promise(r => setTimeout(r, 120));
                 attempts++;
             }
 
-            if (!window.XR8 || !XR8.GlTextureRenderer || !XR8.XrController) {
+            if (!XR8 || !XR8.GlTextureRenderer || !XR8.XrController) {
                 text.innerHTML = "Не вдалося завантажити AR (помилка модулів)";
                 console.error("XR8 modules not loaded");
                 return;
