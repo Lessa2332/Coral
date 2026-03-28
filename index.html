@@ -8,7 +8,6 @@
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
 
-    <!-- Головний 8th Wall engine -->
     <script src="xr-standalone/xr.js"></script>
 
     <style>
@@ -25,12 +24,6 @@
             position:absolute; top:40px; width:100%; text-align:center; 
             color:white; font-size:19px; text-shadow:0 2px 8px #000; 
         }
-        #reticle {
-            position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
-            width:70px; height:70px; border:3px solid rgba(255,255,255,0.7);
-            border-radius:50%; display:none;
-        }
-        .ready { border-color:#00ffaa !important; box-shadow:0 0 25px #00ffaa; }
     </style>
 
     <script>
@@ -39,7 +32,6 @@
             tflitePath: 'resources/'
         };
 
-        // Плавання риб
         AFRAME.registerComponent('territory-swim', {
             schema: { speed: {default: 0.45}, radius: {default: 3.5} },
             init: function () {
@@ -60,13 +52,16 @@
 <body>
     <div id="overlay">
         <div id="instruction" class="ui">Завантаження AR...</div>
-        <div id="reticle"></div>
-        <button id="enter-btn" class="ui" onclick="startAR()">🐬 УВІЙТИ В ПІДВОДНИЙ СВІТ</button>
+        <button id="enter-btn" class="ui" onclick="startAR()">🐬 УВІЙТИ В ПІДВОДНИЙ СВІТ (Задня камера)</button>
     </div>
 
     <audio id="ocean-sound" loop src="assets/sounds/okean.mp3"></audio>
 
-    <a-scene xr-mode-ui="enabled: false" embedded renderer="colorManagement: true; antialias: true;">
+    <a-scene 
+        xr-mode-ui="enabled: false" 
+        embedded 
+        renderer="colorManagement: true; antialias: true;">
+        
         <a-assets>
             <a-asset-item id="m1" src="assets/models/animal1.glb"></a-asset-item>
             <a-asset-item id="m2" src="assets/models/animal2.glb"></a-asset-item>
@@ -74,7 +69,8 @@
             <a-asset-item id="m4" src="assets/models/animal4.glb"></a-asset-item>
         </a-assets>
 
-        <a-camera position="0 1.6 0"></a-camera>
+        <a-camera id="ar-camera" position="0 1.6 0"></a-camera>
+
         <a-light type="ambient" intensity="0.7"></a-light>
         <a-light type="directional" position="2 10 4" intensity="1.2"></a-light>
 
@@ -89,16 +85,25 @@
     <script>
         async function startAR() {
             const scene = document.querySelector('a-scene');
-            const cameraEl = document.querySelector('a-camera');
-            const threeCamera = cameraEl.getObject3D('camera');
+            const cameraEl = document.querySelector('#ar-camera');
+            let threeCamera = cameraEl.getObject3D('camera');
 
             if (!window.XR8) {
-                alert("XR8 не завантажився. Перевір, чи файл xr-standalone/xr.js існує в репозиторії.");
+                alert("XR8 не знайдено. Перевір xr-standalone/xr.js");
                 return;
             }
+
+            // Важливе очікування камери
             if (!threeCamera) {
-                alert("Камера A-Frame не готова.");
-                return;
+                await new Promise(resolve => {
+                    const checkCam = setInterval(() => {
+                        threeCamera = cameraEl.getObject3D('camera');
+                        if (threeCamera) {
+                            clearInterval(checkCam);
+                            resolve();
+                        }
+                    }, 100);
+                });
             }
 
             try {
@@ -107,7 +112,6 @@
                 const pipelineModules = [
                     XR8.GlTextureRenderer.pipelineModule(),
                     XR8.Threejs.pipelineModule()
-                    // Тимчасово без XrController, щоб запустити хоча б камеру + 3D
                 ];
 
                 XR8.addCameraPipelineModules(pipelineModules);
@@ -115,27 +119,28 @@
                 await XR8.run({
                     canvas: scene.canvas,
                     camera: threeCamera,
-                    allowedDevices: 'any'
+                    allowedDevices: 'any',
+                    // Примусово використовуємо задню камеру
+                    preferredCamera: 'environment'   // 'environment' = задня камера
                 });
 
-                // Показуємо світ (без tap-to-place поки що)
+                // Показуємо контент
                 document.querySelector('#world-group').setAttribute('visible', 'true');
 
                 document.getElementById('enter-btn').classList.add('hidden');
                 document.getElementById('instruction').innerHTML = "🐟 Підводний світ запущено!<br>Рухай телефоном";
 
                 document.getElementById('ocean-sound').play().catch(() => {});
-                console.log("✅ AR запущено (базовий режим без SLAM)");
+                console.log("✅ AR запущено (задня камера)");
 
             } catch (err) {
                 console.error("Помилка запуску AR:", err);
-                document.getElementById('instruction').innerHTML = "Помилка запуску AR.<br>Перевір консоль (F12)";
+                document.getElementById('instruction').innerHTML = "Помилка запуску AR.<br>Спробуй на телефоні";
             }
         }
 
         window.startAR = startAR;
 
-        // Після завантаження сцени
         document.querySelector('a-scene').addEventListener('loaded', () => {
             document.getElementById('instruction').textContent = "Готово! Натисни кнопку 👇";
         });
