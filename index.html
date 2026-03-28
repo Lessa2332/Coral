@@ -1,148 +1,184 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Підводний світ AR</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Underwater AR PRO</title>
 
-    <script src="xr-standalone/xr.js"></script>
+<script src="xr-standalone/xr.js"></script>
 
-    <style>
-        body { margin:0; overflow:hidden; background:#000; }
-        #overlay { 
-            position:absolute; inset:0; z-index:100; pointer-events:none; 
-            display:flex; flex-direction:column; justify-content:center; align-items:center; color:white;
-        }
-        #enter-btn {
-            padding:22px 70px; font-size:24px; background:#00bfff; color:white;
-            border:none; border-radius:50px; box-shadow:0 8px 30px rgba(0,191,255,0.6);
-            font-weight:bold; pointer-events:auto;
-        }
-        #instruction { margin-bottom:30px; font-size:20px; text-align:center; text-shadow:0 2px 10px #000; }
-        canvas { display:block; }
-    </style>
+<style>
+body { margin:0; overflow:hidden; background:#000; font-family:sans-serif; }
+#overlay {
+  position:absolute; inset:0; z-index:10;
+  display:flex; flex-direction:column; justify-content:center; align-items:center;
+  color:white; pointer-events:none;
+}
+#btn {
+  padding:20px 60px; font-size:22px;
+  background:#00bfff; border:none; border-radius:50px;
+  color:white; font-weight:bold; pointer-events:auto;
+}
+#text { margin-bottom:30px; font-size:20px; text-align:center; }
+</style>
 </head>
+
 <body>
-    <div id="overlay">
-        <div id="instruction">Натисни кнопку для запуску AR</div>
-        <button id="enter-btn" onclick="startAR()">🐬 ЗАПУСТИТИ ПІДВОДНИЙ СВІТ</button>
-    </div>
 
-    <audio id="ocean-sound" loop src="assets/sounds/okean.mp3"></audio>
+<div id="overlay">
+  <div id="text">Натисни кнопку → наведи на підлогу → тапни</div>
+  <button id="btn">🐬 START AR</button>
+</div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
-    <script src="https://unpkg.com/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
+<audio id="sound" loop src="assets/sounds/okean.mp3"></audio>
 
-    <script>
-        window.XR8Config = {
-            webWorkerPath: 'resources/media-worker.js',
-            tflitePath: 'resources/'
-        };
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+<script src="https://unpkg.com/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
 
-        let scene, camera, renderer, worldGroup;
-        let models = [];
-        let isPlaced = false;
+<script>
+window.XR8Config = {
+  webWorkerPath: 'resources/media-worker.js',
+  tflitePath: 'resources/'
+};
 
-        async function loadModel(url, scale = 0.25) {
-            return new Promise(resolve => {
-                const loader = new THREE.GLTFLoader();
-                loader.load(url, gltf => {
-                    const model = gltf.scene;
-                    model.scale.set(scale, scale, scale);
-                    model.userData = { angle: Math.random()*Math.PI*2, radius: 3 + Math.random()*2 };
-                    resolve(model);
-                }, undefined, () => resolve(null));
-            });
-        }
+let xrScene;
+let worldGroup;
+let models = [];
+let placed = false;
 
-        function animate() {
-            requestAnimationFrame(animate);
-            const t = Date.now() * 0.001;
+const loader = new THREE.GLTFLoader();
 
-            models.forEach((m, i) => {
-                if (!m.userData.angle) return;
-                m.userData.angle += 0.015;
-                const r = m.userData.radius;
-                m.position.x = Math.cos(m.userData.angle + i) * r;
-                m.position.z = Math.sin(m.userData.angle + i) * r - 3;
-                m.position.y = 1 + Math.sin(t + i) * 0.8;
-                m.lookAt(0, m.position.y, -3);
-            });
+function loadModel(url, scale=0.25) {
+  return new Promise(resolve=>{
+    loader.load(url, gltf=>{
+      const m = gltf.scene;
+      m.scale.set(scale,scale,scale);
 
-            if (renderer) renderer.render(scene, camera);
-        }
+      m.userData = {
+        angle: Math.random()*Math.PI*2,
+        radius: 2 + Math.random()*2,
+        speed: 0.008 + Math.random()*0.015,
+        yOffset: Math.random()*1.2
+      };
 
-        async function startAR() {
-            document.getElementById('instruction').innerHTML = "Запуск камери...";
-            document.getElementById('enter-btn').style.display = 'none';
+      resolve(m);
+    }, undefined, ()=>resolve(null));
+  });
+}
 
-            // Ініціалізація Three.js
-            const canvas = document.createElement('canvas');
-            document.body.appendChild(canvas);
+// 🐟 Анімація
+function animate() {
+  const t = Date.now()*0.001;
 
-            renderer = new THREE.WebGLRenderer({canvas, antialias: true});
-            renderer.setSize(window.innerWidth, window.innerHeight);
+  models.forEach((m,i)=>{
+    const d = m.userData;
+    d.angle += d.speed;
 
-            scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-            camera.position.set(0, 1.6, 0);
+    const x = Math.cos(d.angle)*d.radius;
+    const z = Math.sin(d.angle)*d.radius;
+    const y = d.yOffset + Math.sin(t*1.8+i)*0.5;
 
-            scene.add(new THREE.AmbientLight(0x88ccff, 0.9));
-            const light = new THREE.DirectionalLight(0xffffff, 1.2);
-            light.position.set(5, 10, 8);
-            scene.add(light);
+    m.position.set(x,y,z);
 
-            worldGroup = new THREE.Group();
-            scene.add(worldGroup);
+    // напрям руху
+    const dx = Math.cos(d.angle);
+    const dz = Math.sin(d.angle);
 
-            // Завантаження моделей
-            const paths = ['assets/models/animal1.glb','assets/models/animal2.glb',
-                           'assets/models/animal3.glb','assets/models/animal4.glb'];
+    m.lookAt(x+dx, y, z+dz);
+  });
+}
 
-            for (let p of paths) {
-                const model = await loadModel(p, 0.24);
-                if (model) {
-                    models.push(model);
-                    worldGroup.add(model);
-                }
-            }
+// 🎯 XR MODULE
+const threeModule = XR8.Threejs.pipelineModule({
+  onStart: ({canvas}) => {
 
-            // Запуск 8th Wall
-            try {
-                XR8.addCameraPipelineModules([
-                    XR8.GlTextureRenderer.pipelineModule(),
-                    XR8.Threejs.pipelineModule()
-                ]);
+    xrScene = XR8.Threejs.xrScene();
+    const {scene} = xrScene;
 
-                await XR8.run({
-                    canvas: renderer.domElement,
-                    camera: camera,
-                    allowedDevices: 'any',
-                    preferredCamera: 'environment'
-                });
+    // 🌊 атмосфера
+    scene.fog = new THREE.Fog(0x88bbff, 5, 30);
+    scene.background = new THREE.Color(0x112244);
 
-                worldGroup.visible = true;
-                document.getElementById('instruction').innerHTML = "✅ AR запущено!<br>Тапни на екран, щоб розмістити світ на підлозі";
+    // 💡 світло
+    scene.add(new THREE.AmbientLight(0xaaccff, 0.9));
+    const dir = new THREE.DirectionalLight(0xffffff,1);
+    dir.position.set(5,15,10);
+    scene.add(dir);
 
-                document.getElementById('ocean-sound').play().catch(() => {});
-                animate();
+    worldGroup = new THREE.Group();
+    scene.add(worldGroup);
+    worldGroup.visible = false;
 
-                // Додаємо tap-to-place
-                canvas.addEventListener('touchstart', (e) => {
-                    if (isPlaced) return;
-                    isPlaced = true;
-                    // Просте переміщення групи в центр видимої області
-                    worldGroup.position.set(0, -1.5, -4);
-                    document.getElementById('instruction').innerHTML = "🐟 Світ розміщено! Рухай телефоном";
-                });
+    // 📱 tap placement
+    canvas.addEventListener('touchstart', (e)=>{
+      if (placed) return;
 
-            } catch (e) {
-                console.error(e);
-                document.getElementById('instruction').innerHTML = "Помилка запуску";
-            }
-        }
+      const x = e.touches[0].clientX / window.innerWidth;
+      const y = e.touches[0].clientY / window.innerHeight;
 
-        window.startAR = startAR;
-    </script>
+      const hits = XR8.XrController.hitTest(x,y,['surface']);
+
+      if (hits.length>0){
+        const h = hits[0];
+
+        worldGroup.position.copy(h.position);
+        worldGroup.quaternion.copy(h.rotation);
+
+        worldGroup.visible = true;
+        placed = true;
+
+        document.getElementById('text').innerHTML =
+          "✅ Підводний світ активовано!<br>Рухай телефоном";
+
+        document.getElementById('sound').play().catch(()=>{});
+      }
+    });
+
+    // 🐠 завантаження моделей
+    const paths = [
+      'assets/models/animal1.glb',
+      'assets/models/animal2.glb',
+      'assets/models/animal3.glb',
+      'assets/models/animal4.glb'
+    ];
+
+    Promise.all(paths.map(p=>loadModel(p,0.23)))
+    .then(res=>{
+      res.forEach(m=>{
+        if (!m) return;
+        models.push(m);
+        worldGroup.add(m);
+      });
+    });
+  },
+
+  onUpdate: () => {
+    if (placed) animate();
+  }
+});
+
+// 🚀 START
+async function startAR(){
+  document.getElementById('btn').style.display='none';
+  document.getElementById('text').innerHTML="Запуск AR...";
+
+  XR8.addCameraPipelineModules([
+    XR8.GlTextureRenderer.pipelineModule(),
+    threeModule,
+    XR8.XrController.pipelineModule()
+  ]);
+
+  await XR8.run({
+    canvas: document.createElement('canvas'),
+    allowedDevices:'any',
+    preferredCamera:'environment'
+  });
+
+  document.body.appendChild(XR8.Threejs.xrScene().canvas);
+}
+
+document.getElementById('btn').onclick = startAR;
+</script>
+
 </body>
 </html>
