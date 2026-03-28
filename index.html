@@ -7,6 +7,7 @@
 
     <!-- xr-standalone (відкритий код) -->
     <script src="xr-standalone/xr.js"></script>
+    <script src="xr-standalone/xr-slam.js"></script>   <!-- ДОДАНО: забезпечує модулі SLAM -->
 
     <style>
         body { margin:0; overflow:hidden; background:#000; }
@@ -42,7 +43,7 @@
     <script src="customThreejsModule.js"></script>
 
     <script>
-        // Налаштування шляхів для xr-standalone
+        // Налаштування шляхів для xr-standalone (використовуємо кореневу папку resources)
         window.XR8Config = {
             webWorkerPath: 'resources/media-worker.js',
             tflitePath: 'resources/'
@@ -108,7 +109,7 @@
             });
         };
 
-        // Замість стандартного XR8.Threejs.pipelineModule() використовуємо кастомний
+        // Створюємо кастомний модуль Three.js (замість стандартного)
         const threeModule = customThreejsPipelineModule();
 
         async function startAR() {
@@ -118,15 +119,16 @@
             btn.style.display = 'none';
             text.innerHTML = "Запуск AR...";
 
-            // Чекаємо готовності XR8
+            // Чекаємо готовності XR8 та необхідних модулів
             let attempts = 0;
-            while ((!window.XR8 || !XR8.XrController) && attempts < 80) {
+            while ((!window.XR8 || !XR8.GlTextureRenderer || !XR8.XrController) && attempts < 80) {
                 await new Promise(r => setTimeout(r, 120));
                 attempts++;
             }
 
-            if (!window.XR8) {
-                text.innerHTML = "Не вдалося завантажити AR";
+            if (!window.XR8 || !XR8.GlTextureRenderer || !XR8.XrController) {
+                text.innerHTML = "Не вдалося завантажити AR (помилка модулів)";
+                console.error("XR8 modules not loaded");
                 return;
             }
 
@@ -223,7 +225,7 @@
 
             } catch (err) {
                 console.error(err);
-                text.innerHTML = "Помилка запуску AR";
+                text.innerHTML = "Помилка запуску AR: " + err.message;
             }
         }
 
