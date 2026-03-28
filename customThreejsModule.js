@@ -1,44 +1,51 @@
 // customThreejsModule.js
-// Цей модуль замінює XR8.Threejs.pipelineModule() у xr-standalone.
+// Повністю замінює стандартний XR8.Threejs.pipelineModule().
+// Створює власний Three.js рендерер, сцену, камеру та синхронізує їх із SLAM-трекінгом.
 
-export function customThreejsPipelineModule() {
-  let xrScene = null; // { scene, camera, renderer }
+(function() {
+  // Функція, яка повертає об'єкт модуля для конвеєра XR8
+  window.customThreejsPipelineModule = function() {
+    let xrScene = null; // { scene, camera, renderer }
 
-  return {
-    name: 'customThreejs',
+    return {
+      name: 'customThreejs',
 
-    onStart: ({ canvas }) => {
-      // Створення Three.js компонентів
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-      const renderer = new THREE.WebGLRenderer({ canvas, alpha: false });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.setPixelRatio(window.devicePixelRatio);
-      renderer.shadowMap.enabled = true; // якщо потрібні тіні
+      // Викликається один раз, коли камера запускається
+      onStart: ({ canvas }) => {
+        // Створюємо Three.js компоненти
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas, alpha: false });
 
-      xrScene = { scene, camera, renderer };
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true; // увімкнення тіней, якщо потрібно
 
-      // Зробити глобально доступним (як очікують інші модулі)
-      window.XR8.Threejs = window.XR8.Threejs || {};
-      window.XR8.Threejs.xrScene = () => xrScene;
+        xrScene = { scene, camera, renderer };
 
-      // Анімаційний цикл
-      const animate = () => {
-        requestAnimationFrame(animate);
-        renderer.render(scene, camera);
-      };
-      animate();
+        // Забезпечуємо сумісність з кодом, який очікує XR8.Threejs.xrScene()
+        window.XR8.Threejs = window.XR8.Threejs || {};
+        window.XR8.Threejs.xrScene = () => xrScene;
 
-      // Повертаємо об'єкт, щоб інші частини коду могли додавати свої логіки
-      return xrScene;
-    },
+        // Анімаційний цикл для рендерингу
+        const animate = () => {
+          requestAnimationFrame(animate);
+          renderer.render(scene, camera);
+        };
+        animate();
 
-    onUpdate: ({ processCpuResult }) => {
-      if (!xrScene) return;
-      const { camera } = xrScene;
-      const { position, orientation } = processCpuResult.camera;
-      camera.position.set(position.x, position.y, position.z);
-      camera.quaternion.set(orientation.x, orientation.y, orientation.z, orientation.w);
-    },
+        // Повертаємо об'єкт, якщо потрібно (не обов'язково)
+        return xrScene;
+      },
+
+      // Викликається кожен кадр після оновлення SLAM-трекінгу
+      onUpdate: ({ processCpuResult }) => {
+        if (!xrScene) return;
+        const { camera } = xrScene;
+        const { position, orientation } = processCpuResult.camera;
+        camera.position.set(position.x, position.y, position.z);
+        camera.quaternion.set(orientation.x, orientation.y, orientation.z, orientation.w);
+      },
+    };
   };
-}
+})();
