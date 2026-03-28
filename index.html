@@ -8,7 +8,7 @@
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
 
-    <!-- Головний файл 8th Wall (з твого xr-standalone) -->
+    <!-- Головний 8th Wall engine -->
     <script src="xr-standalone/xr.js"></script>
 
     <style>
@@ -39,8 +39,9 @@
             tflitePath: 'resources/'
         };
 
+        // Плавання риб
         AFRAME.registerComponent('territory-swim', {
-            schema: { speed: {default: 0.45}, radius: {default: 3.5}, height: {default: 0.8} },
+            schema: { speed: {default: 0.45}, radius: {default: 3.5} },
             init: function () {
                 this.initialPos = this.el.object3D.position.clone();
                 this.angle = Math.random() * Math.PI * 2;
@@ -51,43 +52,7 @@
                 const p = this.el.object3D.position;
                 p.x = this.initialPos.x + Math.cos(this.angle) * this.data.radius;
                 p.z = this.initialPos.z + Math.sin(this.angle) * this.data.radius;
-                p.y = this.initialPos.y + Math.sin(this.angle * 1.8) * this.data.height;
-
-                this.el.object3D.lookAt(
-                    this.initialPos.x + Math.cos(this.angle + 0.4) * this.data.radius,
-                    p.y + 0.3,
-                    this.initialPos.z + Math.sin(this.angle + 0.4) * this.data.radius
-                );
-            }
-        });
-
-        AFRAME.registerComponent('place-on-tap', {
-            init: function () {
-                this.world = document.querySelector('#world-group');
-                this.reticle = document.querySelector('#reticle');
-                this.placed = false;
-
-                this.el.addEventListener('click', () => {
-                    if (this.placed || !window.XR8?.XrController) return;
-                    window.XR8.XrController.hitTest(0.5, 0.5, ['surface']).then(hits => {
-                        if (hits && hits.length > 0) {
-                            const hit = hits[0];
-                            this.world.object3D.position.copy(hit.position);
-                            this.world.object3D.quaternion.copy(hit.rotation);
-                            this.world.setAttribute('visible', 'true');
-                            this.placed = true;
-                            this.reticle.style.display = 'none';
-                            document.getElementById('instruction').innerHTML = "🐟 Підводний світ розміщено!";
-                        }
-                    }).catch(console.error);
-                });
-            },
-            tick: function () {
-                if (this.placed || !window.XR8?.XrController) return;
-                window.XR8.XrController.hitTest(0.5, 0.5, ['surface']).then(hits => {
-                    if (hits && hits.length > 0) this.reticle.classList.add('ready');
-                    else this.reticle.classList.remove('ready');
-                }).catch(() => {});
+                this.el.object3D.lookAt(this.initialPos.x, p.y, this.initialPos.z);
             }
         });
     </script>
@@ -101,7 +66,7 @@
 
     <audio id="ocean-sound" loop src="assets/sounds/okean.mp3"></audio>
 
-    <a-scene place-on-tap xr-mode-ui="enabled: false" embedded renderer="colorManagement: true; antialias: true;">
+    <a-scene xr-mode-ui="enabled: false" embedded renderer="colorManagement: true; antialias: true;">
         <a-assets>
             <a-asset-item id="m1" src="assets/models/animal1.glb"></a-asset-item>
             <a-asset-item id="m2" src="assets/models/animal2.glb"></a-asset-item>
@@ -110,13 +75,13 @@
         </a-assets>
 
         <a-camera position="0 1.6 0"></a-camera>
-        <a-light type="ambient" intensity="0.65"></a-light>
+        <a-light type="ambient" intensity="0.7"></a-light>
         <a-light type="directional" position="2 10 4" intensity="1.2"></a-light>
 
         <a-entity id="world-group" visible="false">
             <a-entity gltf-model="#m1" position="0 1.2 -3"   scale="0.25 0.25 0.25" animation-mixer territory-swim></a-entity>
-            <a-entity gltf-model="#m2" position="2 0.8 -2.5" scale="0.22 0.22 0.22" animation-mixer territory-swim="speed:0.38; radius:4"></a-entity>
-            <a-entity gltf-model="#m3" position="-2 1.4 -4"  scale="0.20 0.20 0.20" animation-mixer territory-swim="speed:0.5; radius:2.8"></a-entity>
+            <a-entity gltf-model="#m2" position="2 0.8 -2.5" scale="0.22 0.22 0.22" animation-mixer territory-swim></a-entity>
+            <a-entity gltf-model="#m3" position="-2 1.4 -4"  scale="0.20 0.20 0.20" animation-mixer territory-swim></a-entity>
             <a-entity gltf-model="#m4" position="1.8 0.6 -5" scale="0.28 0.28 0.28" animation-mixer territory-swim></a-entity>
         </a-entity>
     </a-scene>
@@ -128,15 +93,21 @@
             const threeCamera = cameraEl.getObject3D('camera');
 
             if (!window.XR8) {
-                alert("XR8 не завантажився. Перевір, чи є xr-standalone/xr.js");
+                alert("XR8 не завантажився. Перевір, чи файл xr-standalone/xr.js існує в репозиторії.");
+                return;
+            }
+            if (!threeCamera) {
+                alert("Камера A-Frame не готова.");
                 return;
             }
 
             try {
+                console.log("Запуск XR8...");
+
                 const pipelineModules = [
                     XR8.GlTextureRenderer.pipelineModule(),
-                    XR8.Threejs.pipelineModule(),
-                    XR8.XrController.pipelineModule()
+                    XR8.Threejs.pipelineModule()
+                    // Тимчасово без XrController, щоб запустити хоча б камеру + 3D
                 ];
 
                 XR8.addCameraPipelineModules(pipelineModules);
@@ -147,20 +118,24 @@
                     allowedDevices: 'any'
                 });
 
+                // Показуємо світ (без tap-to-place поки що)
+                document.querySelector('#world-group').setAttribute('visible', 'true');
+
                 document.getElementById('enter-btn').classList.add('hidden');
-                document.getElementById('reticle').style.display = 'block';
-                document.getElementById('instruction').textContent = "Наведи на підлогу та тапни";
+                document.getElementById('instruction').innerHTML = "🐟 Підводний світ запущено!<br>Рухай телефоном";
 
                 document.getElementById('ocean-sound').play().catch(() => {});
-                console.log("✅ AR запущено успішно");
+                console.log("✅ AR запущено (базовий режим без SLAM)");
+
             } catch (err) {
                 console.error("Помилка запуску AR:", err);
-                document.getElementById('instruction').innerHTML = "Помилка запуску AR.<br>Перевір консоль F12";
+                document.getElementById('instruction').innerHTML = "Помилка запуску AR.<br>Перевір консоль (F12)";
             }
         }
 
         window.startAR = startAR;
 
+        // Після завантаження сцени
         document.querySelector('a-scene').addEventListener('loaded', () => {
             document.getElementById('instruction').textContent = "Готово! Натисни кнопку 👇";
         });
