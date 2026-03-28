@@ -28,7 +28,7 @@
 <body>
     <div id="overlay">
         <div id="text">Натисни кнопку → наведи на підлогу → тапни</div>
-        <button id="btn">🐬 START AR</button>
+        <button id="btn">🐬 УВІЙТИ В ПІДВОДНИЙ СВІТ</button>
     </div>
 
     <audio id="sound" loop src="assets/sounds/okean.mp3"></audio>
@@ -50,7 +50,7 @@
         async function loadModel(url, scale = 0.23) {
             return new Promise(resolve => {
                 const loader = new THREE.GLTFLoader();
-                loader.load(url, (gltf) => {
+                loader.load(url, gltf => {
                     const m = gltf.scene;
                     m.scale.set(scale, scale, scale);
                     m.userData = {
@@ -86,7 +86,7 @@
             });
         };
 
-        // Основний Three.js модуль
+        // Основний модуль
         const threeModule = XR8.Threejs.pipelineModule({
             onStart: ({ canvas }) => {
                 xrSceneRef = XR8.Threejs.xrScene();
@@ -122,26 +122,40 @@
                         });
                     });
 
-                // Tap handler
+                // Tap to Place + реакція на тап
                 canvas.addEventListener('touchstart', (e) => {
-                    if (placed || !xrSceneRef) return;
+                    if (!xrSceneRef) return;
 
                     const touch = e.touches[0];
                     const x = touch.clientX / window.innerWidth;
                     const y = touch.clientY / window.innerHeight;
 
-                    const hits = XR8.XrController.hitTest(x, y, ['surface']);
+                    if (!placed) {
+                        const hits = XR8.XrController.hitTest(x, y, ['surface']);
+                        if (hits && hits.length > 0) {
+                            const h = hits[0];
+                            worldGroup.position.copy(h.position);
+                            worldGroup.quaternion.copy(h.rotation);
+                            worldGroup.visible = true;
+                            placed = true;
 
-                    if (hits && hits.length > 0) {
-                        const h = hits[0];
-                        worldGroup.position.copy(h.position);
-                        worldGroup.quaternion.copy(h.rotation);
-                        worldGroup.visible = true;
-                        placed = true;
-
-                        document.getElementById('text').innerHTML = "✅ Рибки з'явились! Торкнись їх 🐟";
-                        document.getElementById('sound').play().catch(() => {});
+                            document.getElementById('text').innerHTML = "✅ Рибки з'явились! Торкнись їх 🐟";
+                            document.getElementById('sound').play().catch(() => {});
+                        }
+                        return;
                     }
+
+                    // Реакція на тап (рибки тікають)
+                    const touchX = (x - 0.5) * 8;
+                    const touchZ = (y - 0.5) * 8;
+                    models.forEach(m => {
+                        const dx = m.position.x - touchX;
+                        const dz = m.position.z - touchZ;
+                        const dist = Math.sqrt(dx*dx + dz*dz) + 0.001;
+                        const force = 0.18 / dist;
+                        m.userData.vx = (m.userData.vx || 0) + dx * force;
+                        m.userData.vz = (m.userData.vz || 0) + dz * force;
+                    });
                 });
             },
             onUpdate: () => {
@@ -149,7 +163,6 @@
             }
         });
 
-        // Запуск AR
         async function startAR() {
             const btn = document.getElementById('btn');
             const text = document.getElementById('text');
@@ -157,15 +170,15 @@
             btn.style.display = 'none';
             text.innerHTML = "Запуск 8th Wall...";
 
-            // Чекаємо, поки XR8 повністю завантажиться
+            // Чекаємо готовності XR8
             let attempts = 0;
-            while ((!window.XR8 || !XR8.Threejs || !XR8.XrController) && attempts < 60) {
-                await new Promise(r => setTimeout(r, 150));
+            while ((!window.XR8 || !XR8.Threejs || !XR8.XrController) && attempts < 80) {
+                await new Promise(r => setTimeout(r, 120));
                 attempts++;
             }
 
             if (!window.XR8) {
-                text.innerHTML = "Помилка: 8th Wall не завантажився";
+                text.innerHTML = "Не вдалося завантажити 8th Wall";
                 return;
             }
 
@@ -183,11 +196,10 @@
 
             } catch (err) {
                 console.error(err);
-                text.innerHTML = "Не вдалося запустити AR";
+                text.innerHTML = "Помилка запуску AR";
             }
         }
 
-        // Прив'язка кнопки
         document.getElementById('btn').onclick = startAR;
     </script>
 </body>
