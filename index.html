@@ -32,7 +32,7 @@
 
     <script type="module">
         import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js';
-        import { GLTFLoader } from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/examples/js/loaders/GLTFLoader.js';
+        import { GLTFLoader } from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/examples/jsm/loaders/GLTFLoader.js';
 
         window.XR8Config = {
             webWorkerPath: 'resources/media-worker.js',
@@ -56,7 +56,7 @@
                     };
                     resolve(model);
                 }, undefined, (err) => {
-                    console.error('Не вдалося завантажити модель:', url, err);
+                    console.error('Помилка завантаження моделі:', url, err);
                     resolve(null);
                 });
             });
@@ -66,25 +66,23 @@
             const canvas = document.createElement('canvas');
             document.body.appendChild(canvas);
 
-            renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+            renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
             scene = new THREE.Scene();
-
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
             camera.position.set(0, 1.6, 0);
 
-            // Освітлення під водою
-            const ambient = new THREE.AmbientLight(0x88ccff, 0.9);
-            scene.add(ambient);
+            // Підводне освітлення
+            scene.add(new THREE.AmbientLight(0x88ccff, 0.9));
             const dirLight = new THREE.DirectionalLight(0xffffff, 1.1);
             dirLight.position.set(5, 10, 8);
             scene.add(dirLight);
 
             scene.add(worldGroup);
 
-            // Завантажуємо моделі
+            // Завантажуємо твої моделі
             const modelPaths = [
                 'assets/models/animal1.glb',
                 'assets/models/animal2.glb',
@@ -95,7 +93,7 @@
             for (let path of modelPaths) {
                 const model = await loadModel(path, 0.23);
                 if (model) {
-                    model.position.set((Math.random()-0.5)*5, 1 + Math.random()*2, -4 - Math.random()*4);
+                    model.position.set((Math.random()-0.5)*6, 1 + Math.random()*2, -4 - Math.random()*4);
                     worldGroup.add(model);
                     models.push(model);
                 }
@@ -142,16 +140,16 @@
                 worldGroup.visible = true;
 
                 document.getElementById('enter-btn').style.display = 'none';
-                document.getElementById('instruction').innerHTML = "✅ Підводний світ активовано!<br>Рухай телефоном, щоб побачити риб 🐟";
+                document.getElementById('instruction').innerHTML = "✅ Підводний світ активовано!<br>Рухай телефоном 🐟";
 
                 document.getElementById('ocean-sound').play().catch(() => {});
                 animate();
 
-                console.log("✅ Three.js + 8th Wall запущено успішно");
+                console.log("✅ Three.js + 8th Wall запущено");
 
             } catch (err) {
-                console.error("Помилка запуску AR:", err);
-                document.getElementById('instruction').innerHTML = "Помилка запуску.<br>Перевір консоль (F12)";
+                console.error("Помилка:", err);
+                document.getElementById('instruction').innerHTML = "Помилка запуску AR.<br>Перевір консоль";
             }
         }
 
