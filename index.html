@@ -39,15 +39,28 @@
       #btn { padding: 12px 24px; font-size: 18px; }
       #info { font-size: 14px; }
     }
+    .controls-note {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      color: white;
+      background: rgba(0,0,0,0.5);
+      padding: 5px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      pointer-events: none;
+      z-index: 20;
+    }
   </style>
 </head>
 <body>
-  <div id="info">Натисніть кнопку, щоб увімкнути AR. Потім торкніться поверхні, щоб розмістити рибок.</div>
+  <div id="info">Перевірка підтримки AR...</div>
   <button id="btn">🐬 УВІЙТИ В ПІДВОДНИЙ СВІТ</button>
+  <div id="controls-note" class="controls-note" style="display: none;">🖱️ Обертай сцену пальцем/мишею</div>
 
   <audio id="sound" loop src="assets/sounds/okean.mp3"></audio>
 
-  <!-- Three.js та додаткові модулі (ES modules) -->
+  <!-- Three.js та додаткові модулі -->
   <script type="importmap">
     {
       "imports": {
@@ -60,32 +73,12 @@
   <script type="module">
     import * as THREE from 'three';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    // --- Налаштування сцени Three.js ---
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x112244);
-    scene.fog = new THREE.Fog(0x88bbff, 8, 40);
-
-    // Камера для AR буде отримана від WebXR
-    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.xr.enabled = true;  // увімкнення WebXR
-    document.body.appendChild(renderer.domElement);
-
-    // Освітлення
-    const ambientLight = new THREE.AmbientLight(0xaaccff, 0.95);
-    scene.add(ambientLight);
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.05);
-    dirLight.position.set(5, 15, 10);
-    scene.add(dirLight);
-
-    // Група, яка буде розміщена на поверхні
-    let worldGroup = null;
-    let models = [];
-    let placed = false;
-    let sound = document.getElementById('sound');
+    // --- Спільні налаштування ---
+    let scene, camera, renderer, worldGroup, models = [], placed = false, sound;
+    let arMode = false;  // чи працюємо в AR
+    let controls = null;
 
     // Завантаження моделей рибок
     async function loadModel(url, scale = 0.23) {
@@ -106,7 +99,7 @@
       });
     }
 
-    // Анімація рибок
+    // Анімація рибок (однакова для AR та 3D)
     function animateFish() {
       const t = Date.now() * 0.001;
       models.forEach((m, i) => {
@@ -138,7 +131,7 @@
       });
     }
 
-    // Функція, яка створює групу рибок після того, як моделі завантажені
+    // Створення групи рибок
     async function createWorldGroup() {
       const group = new THREE.Group();
       const paths = [
@@ -157,105 +150,176 @@
       return group;
     }
 
-    // Обробка дотику (WebXR hit test)
-    let hitTestSource = null;
-    let hitTestSourceRequested = false;
-    let referenceSpace = null;
+    // --- Загальна ініціалізація Three.js ---
+    function initThree() {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x112244);
+      scene.fog = new THREE.Fog(0x88bbff, 8, 40);
 
-    async function onSelect(event) {
-      if (!placed && hitTestSource && referenceSpace) {
-        // Отримуємо frame
-        const frame = renderer.xr.getFrame();
-        if (!frame) return;
-        
-        const hitTestResults = frame.getHitTestResults(hitTestSource);
-        if (hitTestResults.length > 0) {
-          const hit = hitTestResults[0];
-          const pose = hit.getPose(referenceSpace);
-          if (pose) {
-            worldGroup.position.copy(pose.transform.position);
-            worldGroup.quaternion.copy(pose.transform.orientation);
-            worldGroup.visible = true;
-            placed = true;
-            document.getElementById('info').innerHTML = '✅ Рибки з\'явились! Торкнись їх 🐟';
-            sound.play().catch(() => {});
-          }
-        }
-        return;
-      }
+      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      document.body.appendChild(renderer.domElement);
 
-      // Якщо вже розміщено – рибки "тікають" від дотику
-      if (placed && worldGroup && hitTestSource && referenceSpace) {
-        const frame = renderer.xr.getFrame();
-        if (!frame) return;
-        const hitTestResults = frame.getHitTestResults(hitTestSource);
-        if (hitTestResults.length > 0) {
-          const hit = hitTestResults[0];
-          const pose = hit.getPose(referenceSpace);
-          if (pose) {
-            const touchPoint = pose.transform.position;
-            models.forEach(m => {
-              const dx = m.position.x - touchPoint.x;
-              const dz = m.position.z - touchPoint.z;
-              const dist = Math.sqrt(dx*dx + dz*dz) + 0.001;
-              const force = 0.18 / dist;
-              m.userData.vx += dx * force;
-              m.userData.vz += dz * force;
-            });
-          }
-        }
-      }
+      // Освітлення
+      const ambientLight = new THREE.AmbientLight(0xaaccff, 0.95);
+      scene.add(ambientLight);
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.05);
+      dirLight.position.set(5, 15, 10);
+      scene.add(dirLight);
     }
 
-    // Ініціалізація WebXR сесії
-    async function initXR() {
-      const btn = document.getElementById('btn');
-      btn.style.display = 'none';
-      document.getElementById('info').innerHTML = 'Запуск AR...';
+    // --- Режим 3D (без AR) ---
+    async function startNonAR() {
+      initThree();
+      worldGroup = await createWorldGroup();
+      scene.add(worldGroup);
+      worldGroup.position.set(0, 0, -5);
+      worldGroup.visible = true;
+      placed = true;
 
-      try {
-        // Завантажуємо групу рибок (поки невидиму)
-        worldGroup = await createWorldGroup();
-        scene.add(worldGroup);
-        worldGroup.visible = false;
+      // Орбітальне управління
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.enableZoom = true;
+      controls.zoomSpeed = 1.0;
+      controls.enablePan = true;
+      controls.panSpeed = 0.5;
 
-        // Перевіряємо підтримку WebXR
-        if (!navigator.xr) {
-          throw new Error('WebXR не підтримується вашим браузером. Спробуйте Chrome на Android.');
+      camera.position.set(0, 2, 8);
+      camera.lookAt(0, 0, 0);
+
+      document.getElementById('info').innerHTML = '🐠 3D-режим (AR недоступна). Обертай сцену пальцем/мишею.';
+      document.getElementById('controls-note').style.display = 'block';
+      sound.play().catch(() => {});
+
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update(); // оновлює камеру
+        animateFish();
+        renderer.render(scene, camera);
+      }
+      animate();
+    }
+
+    // --- AR режим (WebXR) ---
+    async function startAR() {
+      initThree();
+      renderer.xr.enabled = true; // увімкнення WebXR
+
+      worldGroup = await createWorldGroup();
+      scene.add(worldGroup);
+      worldGroup.visible = false;
+
+      let hitTestSource = null;
+      let referenceSpace = null;
+
+      async function onSelect(event) {
+        if (!placed && hitTestSource && referenceSpace) {
+          const frame = renderer.xr.getFrame();
+          if (!frame) return;
+          const hitTestResults = frame.getHitTestResults(hitTestSource);
+          if (hitTestResults.length > 0) {
+            const hit = hitTestResults[0];
+            const pose = hit.getPose(referenceSpace);
+            if (pose) {
+              worldGroup.position.copy(pose.transform.position);
+              worldGroup.quaternion.copy(pose.transform.orientation);
+              worldGroup.visible = true;
+              placed = true;
+              document.getElementById('info').innerHTML = '✅ Рибки з\'явились! Торкнись їх 🐟';
+              sound.play().catch(() => {});
+            }
+          }
+          return;
         }
 
-        // Запитуємо сесію
+        if (placed && worldGroup && hitTestSource && referenceSpace) {
+          const frame = renderer.xr.getFrame();
+          if (!frame) return;
+          const hitTestResults = frame.getHitTestResults(hitTestSource);
+          if (hitTestResults.length > 0) {
+            const hit = hitTestResults[0];
+            const pose = hit.getPose(referenceSpace);
+            if (pose) {
+              const touchPoint = pose.transform.position;
+              models.forEach(m => {
+                const dx = m.position.x - touchPoint.x;
+                const dz = m.position.z - touchPoint.z;
+                const dist = Math.sqrt(dx*dx + dz*dz) + 0.001;
+                const force = 0.18 / dist;
+                m.userData.vx += dx * force;
+                m.userData.vz += dz * force;
+              });
+            }
+          }
+        }
+      }
+
+      try {
         const session = await navigator.xr.requestSession('immersive-ar', {
-          requiredFeatures: ['hit-test'],
-          optionalFeatures: ['dom-overlay'],
-          domOverlay: { root: document.body }
+          requiredFeatures: ['hit-test']
         });
         renderer.xr.setSession(session);
 
-        // Отримуємо reference space
         referenceSpace = await session.requestReferenceSpace('viewer');
         hitTestSource = await session.requestHitTestSource({ space: referenceSpace });
-        hitTestSourceRequested = true;
 
-        // Додаємо обробник подій (дотик)
         renderer.domElement.addEventListener('touchstart', onSelect);
 
-        // Запускаємо анімаційний цикл
         renderer.setAnimationLoop((timestamp, frame) => {
           if (placed) animateFish();
           renderer.render(scene, camera);
         });
 
         document.getElementById('info').innerHTML = 'AR готовий. Торкніться поверхні, щоб розмістити рибок.';
+        document.getElementById('btn').style.display = 'none';
       } catch (err) {
-        console.error(err);
-        document.getElementById('info').innerHTML = 'Помилка: ' + err.message;
-        btn.style.display = 'block';
+        console.error('AR session error:', err);
+        document.getElementById('info').innerHTML = 'Не вдалося запустити AR. Запускаємо 3D-режим...';
+        // Якщо AR не вдалося, переходимо на 3D
+        startNonAR();
+      }
+    }
+
+    // --- Головна функція, що вирішує, який режим запускати ---
+    async function decideMode() {
+      const btn = document.getElementById('btn');
+      const info = document.getElementById('info');
+      btn.style.display = 'none';
+      info.innerHTML = 'Перевірка підтримки AR...';
+
+      // Завантажуємо звук (необхідно для будь-якого режиму)
+      sound = document.getElementById('sound');
+
+      // Перевіряємо наявність WebXR
+      if (!navigator.xr) {
+        info.innerHTML = 'Ваш браузер не підтримує WebXR. Запускаємо 3D-режим.';
+        await startNonAR();
+        return;
+      }
+
+      // Перевіряємо, чи підтримується 'immersive-ar'
+      let isSupported = false;
+      try {
+        isSupported = await navigator.xr.isSessionSupported('immersive-ar');
+      } catch (e) {
+        console.warn('isSessionSupported failed:', e);
+      }
+
+      if (!isSupported) {
+        info.innerHTML = 'AR недоступна на цьому пристрої. Запускаємо 3D-режим.';
+        await startNonAR();
+      } else {
+        // Пробуємо запустити AR (якщо не вдасться, startAR перейде на 3D)
+        await startAR();
       }
     }
 
     // Кнопка запуску
-    document.getElementById('btn').addEventListener('click', initXR);
+    document.getElementById('btn').addEventListener('click', decideMode);
   </script>
 </body>
 </html>
