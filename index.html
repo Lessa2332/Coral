@@ -29,36 +29,35 @@
   </div>
   <audio id="sound" loop src="assets/sounds/okean.mp3"></audio>
 
-  <!-- Three.js та GLTFLoader (глобальні) -->
+  <!-- Three.js та GLTFLoader -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
   <script src="https://unpkg.com/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
 
   <!-- Кастомний модуль Three.js (глобальна функція) -->
   <script src="customThreejsModule.js"></script>
 
-  <!-- Конфігурація xr-standalone – встановлюємо до завантаження модулів -->
+  <!-- Конфігурація xr-standalone (правильні шляхи до ресурсів) -->
   <script>
     window.XR8Config = {
-      webWorkerPath: 'resources/media-worker.js',
-      tflitePath: 'resources/'
+      webWorkerPath: 'xr-standalone/resources/media-worker.js',
+      tflitePath: 'xr-standalone/resources/'
     };
   </script>
 
-  <!-- Основний код – ES модуль, імпортує xr-standalone -->
+  <!-- Основний код – ES модуль -->
   <script type="module">
-    // Імпортуємо xr.js та xr-slam.js як ES модулі.
-    // Очікується, що xr.js експортує об'єкт XR8 (або принаймні прив'язується до window).
-    import XR8Module from './xr-standalone/xr.js';
-    import './xr-standalone/xr-slam.js';   // додає модулі SLAM (може покладатися на глобальний XR8)
+    // Імпортуємо xr.js та xr-slam.js як модулі (вони додадуть XR8 у window)
+    import './xr-standalone/xr.js';
+    import './xr-standalone/xr-slam.js';
 
-    // Оскільки xr.js може експортувати за замовчуванням об'єкт XR8,
-    // прив'язуємо його до window для зручності (якщо він ще не глобальний).
-    if (XR8Module && !window.XR8) {
-      window.XR8 = XR8Module;
-    }
-
-    // Якщо після імпорту XR8 все ще не визначено – використовуємо експортований об'єкт.
-    const XR8 = window.XR8 || XR8Module;
+    // Чекаємо, поки XR8 з'явиться в глобальному об'єкті
+    let waitForXR8 = setInterval(() => {
+      if (window.XR8 && window.XR8.GlTextureRenderer && window.XR8.XrController) {
+        clearInterval(waitForXR8);
+        console.log('XR8 ready');
+        init();
+      }
+    }, 100);
 
     let xrSceneRef = null;
     let worldGroup = null;
@@ -118,24 +117,11 @@
 
     const threeModule = window.customThreejsPipelineModule();
 
-    async function startAR() {
+    async function init() {
       const btn = document.getElementById('btn');
       const text = document.getElementById('text');
       btn.style.display = 'none';
       text.innerHTML = "Запуск AR...";
-
-      // Чекаємо, поки всі модулі XR8 стануть доступними
-      let attempts = 0;
-      while ((!XR8 || !XR8.GlTextureRenderer || !XR8.XrController) && attempts < 80) {
-        await new Promise(r => setTimeout(r, 120));
-        attempts++;
-      }
-
-      if (!XR8 || !XR8.GlTextureRenderer || !XR8.XrController) {
-        text.innerHTML = "Помилка: XR8 модулі не завантажились";
-        console.error("XR8 modules missing", XR8);
-        return;
-      }
 
       try {
         // Додаємо модулі конвеєра
@@ -230,8 +216,14 @@
       }
     }
 
-    // Прив'язуємо startAR до кнопки
-    document.getElementById('btn').onclick = startAR;
+    // Кнопка запуску – перевіряємо, чи XR8 вже готовий, інакше чекаємо
+    document.getElementById('btn').onclick = () => {
+      if (window.XR8 && window.XR8.GlTextureRenderer && window.XR8.XrController) {
+        init();
+      } else {
+        alert('XR8 ще не завантажено, зачекайте...');
+      }
+    };
   </script>
 </body>
 </html>
