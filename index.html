@@ -40,167 +40,38 @@
       #btn { padding: 12px 24px; font-size: 18px; }
       #info { font-size: 14px; top: 10px; }
     }
-    .controls-note {
-      position: absolute;
-      bottom: 20px;
-      left: 20px;
-      color: white;
-      background: rgba(0,0,0,0.5);
-      padding: 5px 10px;
-      border-radius: 20px;
-      font-size: 12px;
-      pointer-events: none;
-      z-index: 20;
-    }
   </style>
 </head>
 <body>
   <div id="info">🐠 Підготовка AR-сцени...</div>
   <button id="btn">🐬 УВІЙТИ В ПІДВОДНИЙ СВІТ</button>
-  <div id="controls-note" class="controls-note" style="display: none;">🖱️ Обертай сцену пальцем/мишею</div>
 
   <audio id="sound" loop src="assets/sounds/okean.mp3"></audio>
 
-  <!-- Точка входу для 8th Wall: підключаємо A-Frame та бінарний файл -->
-  <script src="https://cdn.8thwall.com/web/aframe/8frame-1.3.0.min.js"></script>
+  <!-- Підключаємо 8th Wall бінарник -->
   <script src="https://cdn.jsdelivr.net/npm/@8thwall/engine-binary@1/dist/xr.js" async crossorigin="anonymous" data-preload-chunks="slam"></script>
 
-  <!-- Тригер для запуску нашої логіки після готовності 8th Wall -->
-  <script>
-    window.addEventListener('load', () => {
-      const btn = document.getElementById('btn');
-      btn.addEventListener('click', () => {
-        // Показуємо, що AR запускається
-        document.getElementById('info').innerHTML = '🎥 Запуск AR. Наведіть камеру на підлогу...';
-        btn.style.display = 'none';
-        
-        // Ініціалізуємо нашу Three.js логіку, передаючи XR8
-        initUnderwaterAR();
-      });
-    });
-
-    async function initUnderwaterAR() {
-      // Чекаємо на готовність глобального об'єкта XR8 від 8th Wall
-      while (typeof XR8 === 'undefined') {
-        await new Promise(resolve => setTimeout(resolve, 100));
+  <!-- Імпорт Three.js та GLTFLoader -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.134.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.134.0/examples/jsm/"
       }
-
-      // Використовуємо pipeline module для 8th Wall + Three.js
-      XR8.addPipelineModules([
-        XR8.Threejs.pipelineModule(), // Модуль для роботи з Three.js
-        XR8.XrController.pipelineModule(), // Модуль для SLAM трекінгу
-        customPipelineModule() // Наш власний модуль для 3D-логіки
-      ]);
-
-      // Запускаємо 8th Wall
-      XR8.run({ canvas: document.createElement('canvas') });
     }
+  </script>
 
-    function customPipelineModule() {
-      let scene, camera, renderer, worldGroup, models = [], placed = false, sound;
-      let hitTestSource = null;
-      let referenceSpace = null;
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-      return {
-        name: 'underwater-custom',
-        onStart: ({ canvas }) => {
-          // --- Ініціалізація Three.js ---
-          scene = new THREE.Scene();
-          scene.background = new THREE.Color(0x0a2a3a);
-          scene.fog = new THREE.FogExp2(0x0a2a3a, 0.03);
+    let scene, camera, renderer, worldGroup, models = [], placed = false, sound;
+    let canvas = null;
 
-          // Використовуємо камеру та рендерер від 8th Wall
-          const xrScene = XR8.Threejs.xrScene();
-          camera = xrScene.camera;
-          renderer = xrScene.renderer;
-          renderer.setSize(window.innerWidth, window.innerHeight);
-          renderer.setPixelRatio(window.devicePixelRatio);
-          document.body.appendChild(renderer.domElement);
-
-          // Освітлення
-          const ambientLight = new THREE.AmbientLight(0x88aaff, 0.9);
-          scene.add(ambientLight);
-          const dirLight = new THREE.DirectionalLight(0xffffff, 1.1);
-          dirLight.position.set(3, 10, 4);
-          scene.add(dirLight);
-          const backLight = new THREE.PointLight(0x4488ff, 0.5);
-          backLight.position.set(-2, 1, -3);
-          scene.add(backLight);
-
-          // Частинки (опціонально)
-          const particleCount = 400;
-          const particles = new THREE.BufferGeometry();
-          const particlePositions = new Float32Array(particleCount * 3);
-          for (let i = 0; i < particleCount; i++) {
-            particlePositions[i*3] = (Math.random() - 0.5) * 40;
-            particlePositions[i*3+1] = (Math.random() - 0.5) * 8;
-            particlePositions[i*3+2] = (Math.random() - 0.5) * 20 - 10;
-          }
-          particles.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
-          const particleMat = new THREE.PointsMaterial({ color: 0x88aaff, size: 0.05, transparent: true, opacity: 0.6 });
-          const particleSys = new THREE.Points(particles, particleMat);
-          scene.add(particleSys);
-
-          // Завантаження моделей рибок
-          loadModels().then(group => {
-            worldGroup = group;
-            scene.add(worldGroup);
-            worldGroup.visible = false; // спочатку невидимі
-            placed = false;
-          });
-
-          sound = document.getElementById('sound');
-        },
-        onUpdate: () => {
-          // Оновлюємо анімацію рибок, якщо вони вже розміщені
-          if (placed && worldGroup) {
-            animateFish(models);
-          }
-        },
-        onCanvasClick: (event) => {
-          if (!worldGroup) return;
-          
-          if (!placed) {
-            // Розміщуємо групу в точці дотику
-            const hitTest = XR8.XrController.hitTest(event.clientX, event.clientY);
-            if (hitTest && hitTest.position) {
-              worldGroup.position.copy(hitTest.position);
-              worldGroup.quaternion.copy(hitTest.orientation);
-              worldGroup.visible = true;
-              placed = true;
-              document.getElementById('info').innerHTML = '✅ Рибки з\'явились! Торкнись їх, щоб розігнати 🐟';
-              if (sound && sound.paused) {
-                sound.play().catch(e => console.log('Audio play failed:', e));
-              }
-            }
-          } else {
-            // Відштовхуємо рибок від точки дотику
-            const hitTest = XR8.XrController.hitTest(event.clientX, event.clientY);
-            if (hitTest && hitTest.position) {
-              const touchWorldPos = hitTest.position;
-              const touchLocalPos = worldGroup.worldToLocal(touchWorldPos.clone());
-              models.forEach(m => {
-                const dx = m.position.x - touchLocalPos.x;
-                const dz = m.position.z - touchLocalPos.z;
-                const dist = Math.hypot(dx, dz);
-                if (dist < 1.5) {
-                  const force = 0.28 / (dist + 0.1);
-                  m.userData.vx += dx * force;
-                  m.userData.vz += dz * force;
-                  m.userData.vx += (Math.random() - 0.5) * 0.05;
-                  m.userData.vz += (Math.random() - 0.5) * 0.05;
-                }
-              });
-            }
-          }
-        }
-      };
-    }
-
-    // --- Допоміжні функції (анімація, завантаження моделей) ---
+    // --- Завантаження моделей ---
     async function loadModel(url, scale = 0.22) {
       return new Promise((resolve, reject) => {
-        const loader = new THREE.GLTFLoader();
+        const loader = new GLTFLoader();
         loader.load(url, gltf => {
           const m = gltf.scene;
           m.scale.set(scale, scale, scale);
@@ -229,7 +100,7 @@
       return group;
     }
 
-    function animateFish(models) {
+    function animateFish() {
       const t = Date.now() * 0.001;
       models.forEach((m, idx) => {
         if (!m.userData) return;
@@ -268,6 +139,142 @@
         }
       });
     }
+
+    // --- Основний модуль AR ---
+    async function startAR() {
+      const btn = document.getElementById('btn');
+      btn.style.display = 'none';
+      document.getElementById('info').innerHTML = '🎥 Запуск AR. Наведіть камеру на підлогу...';
+      
+      sound = document.getElementById('sound');
+
+      // Створюємо canvas для 8th Wall
+      canvas = document.createElement('canvas');
+      canvas.id = 'camerafeed';
+      canvas.style.position = 'absolute';
+      canvas.style.top = '0';
+      canvas.style.left = '0';
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+      document.body.appendChild(canvas);
+
+      // Функція, яка виконається після завантаження 8th Wall
+      window.onxrloaded = async () => {
+        // Завантажуємо моделі
+        worldGroup = await loadModels();
+        
+        // Налаштовуємо XR Controller
+        XR8.XrController.configure({ disableWorldTracking: false });
+        
+        // Додаємо pipeline модулі
+        XR8.addCameraPipelineModules([
+          XR8.GlTextureRenderer.pipelineModule(),      // Відображення камери
+          XR8.Threejs.pipelineModule(),                // Three.js інтеграція
+          XR8.XrController.pipelineModule(),           // SLAM трекінг
+          customPipelineModule()                       // Наша логіка
+        ]);
+        
+        // Запускаємо 8th Wall
+        XR8.run({ canvas: canvas });
+      };
+
+      // Кастомний модуль для Three.js логіки
+      function customPipelineModule() {
+        let threeScene = null;
+        let threeCamera = null;
+        let threeRenderer = null;
+        
+        return {
+          name: 'underwater-custom',
+          
+          onStart: () => {
+            // Отримуємо Three.js сцену, камеру та рендерер від 8th Wall
+            threeScene = XR8.Threejs.xrScene();
+            threeCamera = threeScene.camera;
+            threeRenderer = threeScene.renderer;
+            
+            // Додаємо нашу групу рибок до сцени
+            threeScene.add(worldGroup);
+            worldGroup.visible = false;
+            
+            // Додаємо освітлення
+            const ambientLight = new THREE.AmbientLight(0x88aaff, 0.9);
+            threeScene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.1);
+            dirLight.position.set(3, 10, 4);
+            threeScene.add(dirLight);
+            const backLight = new THREE.PointLight(0x4488ff, 0.5);
+            backLight.position.set(-2, 1, -3);
+            threeScene.add(backLight);
+            
+            // Додаємо підводні частки
+            const particleCount = 400;
+            const particles = new THREE.BufferGeometry();
+            const particlePositions = new Float32Array(particleCount * 3);
+            for (let i = 0; i < particleCount; i++) {
+              particlePositions[i*3] = (Math.random() - 0.5) * 40;
+              particlePositions[i*3+1] = (Math.random() - 0.5) * 8;
+              particlePositions[i*3+2] = (Math.random() - 0.5) * 20 - 10;
+            }
+            particles.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+            const particleMat = new THREE.PointsMaterial({ color: 0x88aaff, size: 0.05, transparent: true, opacity: 0.6 });
+            const particleSys = new THREE.Points(particles, particleMat);
+            threeScene.add(particleSys);
+          },
+          
+          onUpdate: () => {
+            if (placed && worldGroup) {
+              animateFish();
+            }
+          },
+          
+          onCanvasClick: (event) => {
+            if (!worldGroup) return;
+            
+            // Використовуємо hitTest для визначення місця дотику
+            const hitTest = XR8.XrController.hitTest(event.clientX, event.clientY);
+            
+            if (!placed && hitTest && hitTest.position) {
+              // Розміщуємо групу
+              worldGroup.position.copy(hitTest.position);
+              worldGroup.quaternion.copy(hitTest.orientation);
+              worldGroup.visible = true;
+              placed = true;
+              document.getElementById('info').innerHTML = '✅ Рибки з\'явились! Торкнись їх, щоб розігнати 🐟';
+              if (sound && sound.paused) {
+                sound.play().catch(e => console.log('Audio play failed:', e));
+              }
+            } else if (placed && hitTest && hitTest.position) {
+              // Відштовхуємо рибок
+              const touchWorldPos = hitTest.position;
+              const touchLocalPos = worldGroup.worldToLocal(touchWorldPos.clone());
+              models.forEach(m => {
+                const dx = m.position.x - touchLocalPos.x;
+                const dz = m.position.z - touchLocalPos.z;
+                const dist = Math.hypot(dx, dz);
+                if (dist < 1.5) {
+                  const force = 0.28 / (dist + 0.1);
+                  m.userData.vx += dx * force;
+                  m.userData.vz += dz * force;
+                  m.userData.vx += (Math.random() - 0.5) * 0.05;
+                  m.userData.vz += (Math.random() - 0.5) * 0.05;
+                }
+              });
+            }
+          }
+        };
+      }
+
+      // Якщо 8th Wall ще не завантажився, чекаємо
+      if (typeof XR8 !== 'undefined') {
+        window.onxrloaded();
+      } else {
+        window.addEventListener('xrloaded', window.onxrloaded);
+      }
+    }
+
+    // Кнопка запуску
+    document.getElementById('btn').addEventListener('click', startAR);
   </script>
 </body>
 </html>
