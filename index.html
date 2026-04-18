@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Підводний світ AR (WebXR)</title>
+  <title>Підводний світ AR (8th Wall + SLAM)</title>
   <style>
-    body { margin: 0; overflow: hidden; font-family: sans-serif; }
+    body { margin: 0; overflow: hidden; font-family: system-ui, sans-serif; }
     #info {
       position: absolute;
       top: 20px;
@@ -17,6 +17,7 @@
       padding: 10px;
       z-index: 10;
       pointer-events: none;
+      backdrop-filter: blur(8px);
     }
     #btn {
       position: absolute;
@@ -37,7 +38,7 @@
     #btn:active { background: #0099cc; }
     @media (max-width: 600px) {
       #btn { padding: 12px 24px; font-size: 18px; }
-      #info { font-size: 14px; }
+      #info { font-size: 14px; top: 10px; }
     }
     .controls-note {
       position: absolute;
@@ -54,272 +55,219 @@
   </style>
 </head>
 <body>
-  <div id="info">Перевірка підтримки AR...</div>
+  <div id="info">🐠 Підготовка AR-сцени...</div>
   <button id="btn">🐬 УВІЙТИ В ПІДВОДНИЙ СВІТ</button>
   <div id="controls-note" class="controls-note" style="display: none;">🖱️ Обертай сцену пальцем/мишею</div>
 
   <audio id="sound" loop src="assets/sounds/okean.mp3"></audio>
 
-  <!-- Three.js та додаткові модулі -->
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://unpkg.com/three@0.134.0/build/three.module.js",
-        "three/addons/": "https://unpkg.com/three@0.134.0/examples/jsm/"
+  <!-- Точка входу для 8th Wall: підключаємо A-Frame та бінарний файл -->
+  <script src="https://cdn.8thwall.com/web/aframe/8frame-1.3.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@8thwall/engine-binary@1/dist/xr.js" async crossorigin="anonymous" data-preload-chunks="slam"></script>
+
+  <!-- Тригер для запуску нашої логіки після готовності 8th Wall -->
+  <script>
+    window.addEventListener('load', () => {
+      const btn = document.getElementById('btn');
+      btn.addEventListener('click', () => {
+        // Показуємо, що AR запускається
+        document.getElementById('info').innerHTML = '🎥 Запуск AR. Наведіть камеру на підлогу...';
+        btn.style.display = 'none';
+        
+        // Ініціалізуємо нашу Three.js логіку, передаючи XR8
+        initUnderwaterAR();
+      });
+    });
+
+    async function initUnderwaterAR() {
+      // Чекаємо на готовність глобального об'єкта XR8 від 8th Wall
+      while (typeof XR8 === 'undefined') {
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
+
+      // Використовуємо pipeline module для 8th Wall + Three.js
+      XR8.addPipelineModules([
+        XR8.Threejs.pipelineModule(), // Модуль для роботи з Three.js
+        XR8.XrController.pipelineModule(), // Модуль для SLAM трекінгу
+        customPipelineModule() // Наш власний модуль для 3D-логіки
+      ]);
+
+      // Запускаємо 8th Wall
+      XR8.run({ canvas: document.createElement('canvas') });
     }
-  </script>
 
-  <script type="module">
-    import * as THREE from 'three';
-    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    function customPipelineModule() {
+      let scene, camera, renderer, worldGroup, models = [], placed = false, sound;
+      let hitTestSource = null;
+      let referenceSpace = null;
 
-    // --- Спільні налаштування ---
-    let scene, camera, renderer, worldGroup, models = [], placed = false, sound;
-    let arMode = false;  // чи працюємо в AR
-    let controls = null;
+      return {
+        name: 'underwater-custom',
+        onStart: ({ canvas }) => {
+          // --- Ініціалізація Three.js ---
+          scene = new THREE.Scene();
+          scene.background = new THREE.Color(0x0a2a3a);
+          scene.fog = new THREE.FogExp2(0x0a2a3a, 0.03);
 
-    // Завантаження моделей рибок
-    async function loadModel(url, scale = 0.23) {
+          // Використовуємо камеру та рендерер від 8th Wall
+          const xrScene = XR8.Threejs.xrScene();
+          camera = xrScene.camera;
+          renderer = xrScene.renderer;
+          renderer.setSize(window.innerWidth, window.innerHeight);
+          renderer.setPixelRatio(window.devicePixelRatio);
+          document.body.appendChild(renderer.domElement);
+
+          // Освітлення
+          const ambientLight = new THREE.AmbientLight(0x88aaff, 0.9);
+          scene.add(ambientLight);
+          const dirLight = new THREE.DirectionalLight(0xffffff, 1.1);
+          dirLight.position.set(3, 10, 4);
+          scene.add(dirLight);
+          const backLight = new THREE.PointLight(0x4488ff, 0.5);
+          backLight.position.set(-2, 1, -3);
+          scene.add(backLight);
+
+          // Частинки (опціонально)
+          const particleCount = 400;
+          const particles = new THREE.BufferGeometry();
+          const particlePositions = new Float32Array(particleCount * 3);
+          for (let i = 0; i < particleCount; i++) {
+            particlePositions[i*3] = (Math.random() - 0.5) * 40;
+            particlePositions[i*3+1] = (Math.random() - 0.5) * 8;
+            particlePositions[i*3+2] = (Math.random() - 0.5) * 20 - 10;
+          }
+          particles.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+          const particleMat = new THREE.PointsMaterial({ color: 0x88aaff, size: 0.05, transparent: true, opacity: 0.6 });
+          const particleSys = new THREE.Points(particles, particleMat);
+          scene.add(particleSys);
+
+          // Завантаження моделей рибок
+          loadModels().then(group => {
+            worldGroup = group;
+            scene.add(worldGroup);
+            worldGroup.visible = false; // спочатку невидимі
+            placed = false;
+          });
+
+          sound = document.getElementById('sound');
+        },
+        onUpdate: () => {
+          // Оновлюємо анімацію рибок, якщо вони вже розміщені
+          if (placed && worldGroup) {
+            animateFish(models);
+          }
+        },
+        onCanvasClick: (event) => {
+          if (!worldGroup) return;
+          
+          if (!placed) {
+            // Розміщуємо групу в точці дотику
+            const hitTest = XR8.XrController.hitTest(event.clientX, event.clientY);
+            if (hitTest && hitTest.position) {
+              worldGroup.position.copy(hitTest.position);
+              worldGroup.quaternion.copy(hitTest.orientation);
+              worldGroup.visible = true;
+              placed = true;
+              document.getElementById('info').innerHTML = '✅ Рибки з\'явились! Торкнись їх, щоб розігнати 🐟';
+              if (sound && sound.paused) {
+                sound.play().catch(e => console.log('Audio play failed:', e));
+              }
+            }
+          } else {
+            // Відштовхуємо рибок від точки дотику
+            const hitTest = XR8.XrController.hitTest(event.clientX, event.clientY);
+            if (hitTest && hitTest.position) {
+              const touchWorldPos = hitTest.position;
+              const touchLocalPos = worldGroup.worldToLocal(touchWorldPos.clone());
+              models.forEach(m => {
+                const dx = m.position.x - touchLocalPos.x;
+                const dz = m.position.z - touchLocalPos.z;
+                const dist = Math.hypot(dx, dz);
+                if (dist < 1.5) {
+                  const force = 0.28 / (dist + 0.1);
+                  m.userData.vx += dx * force;
+                  m.userData.vz += dz * force;
+                  m.userData.vx += (Math.random() - 0.5) * 0.05;
+                  m.userData.vz += (Math.random() - 0.5) * 0.05;
+                }
+              });
+            }
+          }
+        }
+      };
+    }
+
+    // --- Допоміжні функції (анімація, завантаження моделей) ---
+    async function loadModel(url, scale = 0.22) {
       return new Promise((resolve, reject) => {
-        const loader = new GLTFLoader();
+        const loader = new THREE.GLTFLoader();
         loader.load(url, gltf => {
           const m = gltf.scene;
           m.scale.set(scale, scale, scale);
           m.userData = {
             angle: Math.random() * Math.PI * 2,
-            radius: 2.8 + Math.random() * 2.2,
-            speed: 0.009 + Math.random() * 0.018,
-            heightOffset: Math.random() * 1.4,
-            vx: 0, vz: 0
+            radius: 2.2 + Math.random() * 2.5,
+            speed: 0.008 + Math.random() * 0.02,
+            heightOffset: Math.random() * 1.2,
+            vx: (Math.random() - 0.5) * 0.03,
+            vz: (Math.random() - 0.5) * 0.03
           };
           resolve(m);
         }, undefined, reject);
       });
     }
 
-    // Анімація рибок (однакова для AR та 3D)
-    function animateFish() {
-      const t = Date.now() * 0.001;
-      models.forEach((m, i) => {
-        if (!m.userData) return;
-        m.userData.angle += m.userData.speed;
-
-        const r = m.userData.radius;
-        const dx = Math.cos(m.userData.angle + i);
-        const dz = Math.sin(m.userData.angle + i);
-
-        m.userData.vx *= 0.98;
-        m.userData.vz *= 0.98;
-        m.position.x += m.userData.vx;
-        m.position.z += m.userData.vz;
-
-        const maxDist = 4.5;
-        let dist = Math.hypot(m.position.x, m.position.z + 3.5);
-        if (dist > maxDist) {
-          m.position.x *= maxDist / dist;
-          m.position.z = (m.position.z + 3.5) * (maxDist / dist) - 3.5;
-        }
-
-        m.position.x += dx * r * 0.02;
-        m.position.z += dz * r * 0.02;
-        m.position.y = m.userData.heightOffset + Math.sin(t * 1.6 + i) * 0.75;
-
-        const dir = new THREE.Vector3(dx, 0, dz).normalize();
-        m.lookAt(m.position.clone().add(dir));
-      });
-    }
-
-    // Створення групи рибок
-    async function createWorldGroup() {
+    async function loadModels() {
       const group = new THREE.Group();
-      const paths = [
-        'assets/models/animal1.glb',
-        'assets/models/animal2.glb',
-        'assets/models/animal3.glb',
-        'assets/models/animal4.glb'
-      ];
+      const modelNames = ['animal1.glb', 'animal2.glb', 'animal3.glb', 'animal4.glb', 'animal5.glb', 'animal6.glb', 'animal7.glb'];
+      const paths = modelNames.map(name => `assets/models/${name}`);
       const loaded = await Promise.all(paths.map(p => loadModel(p)));
       loaded.forEach(m => {
-        if (m) {
-          models.push(m);
-          group.add(m);
-        }
+        models.push(m);
+        group.add(m);
       });
       return group;
     }
 
-    // --- Загальна ініціалізація Three.js ---
-    function initThree() {
-      scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x112244);
-      scene.fog = new THREE.Fog(0x88bbff, 8, 40);
-
-      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
-      renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.setPixelRatio(window.devicePixelRatio);
-      document.body.appendChild(renderer.domElement);
-
-      // Освітлення
-      const ambientLight = new THREE.AmbientLight(0xaaccff, 0.95);
-      scene.add(ambientLight);
-      const dirLight = new THREE.DirectionalLight(0xffffff, 1.05);
-      dirLight.position.set(5, 15, 10);
-      scene.add(dirLight);
-    }
-
-    // --- Режим 3D (без AR) ---
-    async function startNonAR() {
-      initThree();
-      worldGroup = await createWorldGroup();
-      scene.add(worldGroup);
-      worldGroup.position.set(0, 0, -5);
-      worldGroup.visible = true;
-      placed = true;
-
-      // Орбітальне управління
-      controls = new OrbitControls(camera, renderer.domElement);
-      controls.enableDamping = true;
-      controls.dampingFactor = 0.05;
-      controls.enableZoom = true;
-      controls.zoomSpeed = 1.0;
-      controls.enablePan = true;
-      controls.panSpeed = 0.5;
-
-      camera.position.set(0, 2, 8);
-      camera.lookAt(0, 0, 0);
-
-      document.getElementById('info').innerHTML = '🐠 3D-режим (AR недоступна). Обертай сцену пальцем/мишею.';
-      document.getElementById('controls-note').style.display = 'block';
-      sound.play().catch(() => {});
-
-      function animate() {
-        requestAnimationFrame(animate);
-        controls.update(); // оновлює камеру
-        animateFish();
-        renderer.render(scene, camera);
-      }
-      animate();
-    }
-
-    // --- AR режим (WebXR) ---
-    async function startAR() {
-      initThree();
-      renderer.xr.enabled = true; // увімкнення WebXR
-
-      worldGroup = await createWorldGroup();
-      scene.add(worldGroup);
-      worldGroup.visible = false;
-
-      let hitTestSource = null;
-      let referenceSpace = null;
-
-      async function onSelect(event) {
-        if (!placed && hitTestSource && referenceSpace) {
-          const frame = renderer.xr.getFrame();
-          if (!frame) return;
-          const hitTestResults = frame.getHitTestResults(hitTestSource);
-          if (hitTestResults.length > 0) {
-            const hit = hitTestResults[0];
-            const pose = hit.getPose(referenceSpace);
-            if (pose) {
-              worldGroup.position.copy(pose.transform.position);
-              worldGroup.quaternion.copy(pose.transform.orientation);
-              worldGroup.visible = true;
-              placed = true;
-              document.getElementById('info').innerHTML = '✅ Рибки з\'явились! Торкнись їх 🐟';
-              sound.play().catch(() => {});
-            }
-          }
-          return;
+    function animateFish(models) {
+      const t = Date.now() * 0.001;
+      models.forEach((m, idx) => {
+        if (!m.userData) return;
+        const data = m.userData;
+        data.angle += data.speed;
+        const r = data.radius;
+        const dx = Math.cos(data.angle + idx);
+        const dz = Math.sin(data.angle + idx);
+        
+        data.vx += (Math.random() - 0.5) * 0.002;
+        data.vz += (Math.random() - 0.5) * 0.002;
+        data.vx = Math.min(Math.max(data.vx, -0.08), 0.08);
+        data.vz = Math.min(Math.max(data.vz, -0.08), 0.08);
+        data.vx *= 0.98;
+        data.vz *= 0.98;
+        
+        m.position.x += data.vx;
+        m.position.z += data.vz;
+        
+        const targetX = Math.cos(data.angle + idx) * r;
+        const targetZ = Math.sin(data.angle + idx) * r;
+        m.position.x += (targetX - m.position.x) * 0.02;
+        m.position.z += (targetZ - m.position.z) * 0.02;
+        
+        let dist = Math.hypot(m.position.x, m.position.z);
+        if (dist > 4.2) {
+          m.position.x *= 4.2 / dist;
+          m.position.z *= 4.2 / dist;
         }
-
-        if (placed && worldGroup && hitTestSource && referenceSpace) {
-          const frame = renderer.xr.getFrame();
-          if (!frame) return;
-          const hitTestResults = frame.getHitTestResults(hitTestSource);
-          if (hitTestResults.length > 0) {
-            const hit = hitTestResults[0];
-            const pose = hit.getPose(referenceSpace);
-            if (pose) {
-              const touchPoint = pose.transform.position;
-              models.forEach(m => {
-                const dx = m.position.x - touchPoint.x;
-                const dz = m.position.z - touchPoint.z;
-                const dist = Math.sqrt(dx*dx + dz*dz) + 0.001;
-                const force = 0.18 / dist;
-                m.userData.vx += dx * force;
-                m.userData.vz += dz * force;
-              });
-            }
-          }
+        
+        m.position.y = data.heightOffset + Math.sin(t * 1.6 + idx) * 0.7;
+        
+        const dir = new THREE.Vector3(data.vx, 0, data.vz).normalize();
+        if (dir.length() > 0.01) {
+          m.lookAt(m.position.clone().add(dir));
         }
-      }
-
-      try {
-        const session = await navigator.xr.requestSession('immersive-ar', {
-          requiredFeatures: ['hit-test']
-        });
-        renderer.xr.setSession(session);
-
-        referenceSpace = await session.requestReferenceSpace('viewer');
-        hitTestSource = await session.requestHitTestSource({ space: referenceSpace });
-
-        renderer.domElement.addEventListener('touchstart', onSelect);
-
-        renderer.setAnimationLoop((timestamp, frame) => {
-          if (placed) animateFish();
-          renderer.render(scene, camera);
-        });
-
-        document.getElementById('info').innerHTML = 'AR готовий. Торкніться поверхні, щоб розмістити рибок.';
-        document.getElementById('btn').style.display = 'none';
-      } catch (err) {
-        console.error('AR session error:', err);
-        document.getElementById('info').innerHTML = 'Не вдалося запустити AR. Запускаємо 3D-режим...';
-        // Якщо AR не вдалося, переходимо на 3D
-        startNonAR();
-      }
+      });
     }
-
-    // --- Головна функція, що вирішує, який режим запускати ---
-    async function decideMode() {
-      const btn = document.getElementById('btn');
-      const info = document.getElementById('info');
-      btn.style.display = 'none';
-      info.innerHTML = 'Перевірка підтримки AR...';
-
-      // Завантажуємо звук (необхідно для будь-якого режиму)
-      sound = document.getElementById('sound');
-
-      // Перевіряємо наявність WebXR
-      if (!navigator.xr) {
-        info.innerHTML = 'Ваш браузер не підтримує WebXR. Запускаємо 3D-режим.';
-        await startNonAR();
-        return;
-      }
-
-      // Перевіряємо, чи підтримується 'immersive-ar'
-      let isSupported = false;
-      try {
-        isSupported = await navigator.xr.isSessionSupported('immersive-ar');
-      } catch (e) {
-        console.warn('isSessionSupported failed:', e);
-      }
-
-      if (!isSupported) {
-        info.innerHTML = 'AR недоступна на цьому пристрої. Запускаємо 3D-режим.';
-        await startNonAR();
-      } else {
-        // Пробуємо запустити AR (якщо не вдасться, startAR перейде на 3D)
-        await startAR();
-      }
-    }
-
-    // Кнопка запуску
-    document.getElementById('btn').addEventListener('click', decideMode);
   </script>
 </body>
 </html>
